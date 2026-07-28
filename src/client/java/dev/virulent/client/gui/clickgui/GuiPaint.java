@@ -26,6 +26,59 @@ final class GuiPaint {
 	private GuiPaint() {
 	}
 
+	/** Resolved palette for the current accent (black accent → black UI + white text). */
+	static Palette palette(int accent, boolean black) {
+		if (!black) {
+			return new Palette(
+				WINDOW_BG,
+				WINDOW_INNER,
+				PANEL_BG,
+				PANEL_HOVER,
+				SIDEBAR_BG,
+				BORDER,
+				BORDER_SOFT,
+				TEXT,
+				TEXT_DIM,
+				TEXT_MUTED,
+				TRACK,
+				0xFF101018,
+				accent | 0xFF000000
+			);
+		}
+		return new Palette(
+			0xF0000000,
+			0xFF000000,
+			0xFF0A0A0A,
+			0xFF1A1A1A,
+			0xFF000000,
+			0xFF3A3A3A,
+			0xFF2A2A2A,
+			0xFFFFFFFF,
+			0xFFDDDDDD,
+			0xFFAAAAAA,
+			0xFF2A2A2A,
+			0xFF000000,
+			0xFFFFFFFF
+		);
+	}
+
+	record Palette(
+		int windowBg,
+		int windowInner,
+		int panelBg,
+		int panelHover,
+		int sidebarBg,
+		int border,
+		int borderSoft,
+		int text,
+		int textDim,
+		int textMuted,
+		int track,
+		int idleTab,
+		int fg
+	) {
+	}
+
 	static void fill(GuiGraphicsExtractor context, int x1, int y1, int x2, int y2, int color) {
 		context.fill(x1, y1, x2, y2, color);
 	}
@@ -52,18 +105,26 @@ final class GuiPaint {
 	}
 
 	static void toggle(GuiGraphicsExtractor context, int x, int y, boolean on, int accent) {
+		toggle(context, x, y, on, accent, BORDER);
+	}
+
+	static void toggle(GuiGraphicsExtractor context, int x, int y, boolean on, int accent, int border) {
 		int trackW = 16;
 		int trackH = 8;
 		int trackColor = on ? withAlpha(accent, 0xAA) : 0xFF303040;
 		fill(context, x, y, x + trackW, y + trackH, trackColor);
-		border(context, x, y, trackW, trackH, on ? accent : BORDER);
+		border(context, x, y, trackW, trackH, on ? accent : border);
 		int knobX = on ? x + trackW - 7 : x + 1;
 		fill(context, knobX, y + 1, knobX + 6, y + trackH - 1, on ? 0xFFF0FFF0 : 0xFFB0B0C0);
 	}
 
 	static void slider(GuiGraphicsExtractor context, int x, int y, int w, double percent, int accent) {
+		slider(context, x, y, w, percent, accent, TRACK);
+	}
+
+	static void slider(GuiGraphicsExtractor context, int x, int y, int w, double percent, int accent, int track) {
 		int trackY = y + 1;
-		fill(context, x, trackY, x + w, trackY + 3, TRACK);
+		fill(context, x, trackY, x + w, trackY + 3, track);
 		int fillW = Math.max(0, Math.min(w, (int) Math.round(w * percent)));
 		if (fillW > 0) {
 			fill(context, x, trackY, x + fillW, trackY + 3, accent | 0xFF000000);
@@ -74,21 +135,49 @@ final class GuiPaint {
 	}
 
 	static void chip(GuiGraphicsExtractor context, String text, int x, int y, int accent, boolean active) {
+		chip(context, text, x, y, accent, active, TEXT_MUTED, 0xFF222230);
+	}
+
+	static void chip(
+		GuiGraphicsExtractor context,
+		String text,
+		int x,
+		int y,
+		int accent,
+		boolean active,
+		int mutedText,
+		int idleBg
+	) {
 		var font = Minecraft.getInstance().font;
 		int tw = font.width(text);
 		int pad = 3;
-		int bg = active ? withAlpha(accent, 0x55) : 0xFF222230;
+		int bg = active ? withAlpha(accent, 0x55) : idleBg;
 		fill(context, x, y, x + tw + pad * 2, y + 9, bg);
 		if (active) {
 			border(context, x, y, tw + pad * 2, 9, withAlpha(accent, 0xAA));
 		}
-		context.text(font, text, x + pad, y + 1, active ? accent : TEXT_MUTED);
+		context.text(font, text, x + pad, y + 1, active ? accent : mutedText);
 	}
 
 	static void chipRight(GuiGraphicsExtractor context, String text, int right, int y, int accent, boolean active) {
 		var font = Minecraft.getInstance().font;
 		int tw = font.width(text);
 		chip(context, text, right - tw - 6, y, accent, active);
+	}
+
+	static void chipRight(
+		GuiGraphicsExtractor context,
+		String text,
+		int right,
+		int y,
+		int accent,
+		boolean active,
+		int mutedText,
+		int idleBg
+	) {
+		var font = Minecraft.getInstance().font;
+		int tw = font.width(text);
+		chip(context, text, right - tw - 6, y, accent, active, mutedText, idleBg);
 	}
 
 	static int blend(int colorA, int colorB, float ratio) {

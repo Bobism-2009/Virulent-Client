@@ -176,6 +176,7 @@ public final class ClickGuiScreen extends Screen {
 		}
 
 		int accent = guiSettings.getAccentColor();
+		GuiPaint.Palette p = GuiPaint.palette(accent, guiSettings.isAccentBlack());
 		int ww = windowWidth();
 		int wh = windowHeight();
 
@@ -186,31 +187,31 @@ public final class ClickGuiScreen extends Screen {
 		pose.translate(0.0f, slide);
 
 		GuiPaint.fill(context, windowX, windowY, windowX + ww, windowBottom(),
-			GuiPaint.withAlpha(GuiPaint.WINDOW_BG, motion.openAlpha(0xF0)));
-		GuiPaint.border(context, windowX, windowY, ww, wh, GuiPaint.withAlpha(GuiPaint.BORDER, motion.openAlpha(0xFF)));
-		GuiPaint.topAccent(context, windowX, windowY, ww, accent);
+			GuiPaint.withAlpha(p.windowBg(), motion.openAlpha(0xF0)));
+		GuiPaint.border(context, windowX, windowY, ww, wh, GuiPaint.withAlpha(p.border(), motion.openAlpha(0xFF)));
+		GuiPaint.topAccent(context, windowX, windowY, ww, p.fg());
 		GuiPaint.fill(context, contentX(), windowY + HEADER_HEIGHT, windowX + ww - 1, windowBottom() - 1,
-			GuiPaint.withAlpha(GuiPaint.WINDOW_INNER, motion.openAlpha(0xFF)));
+			GuiPaint.withAlpha(p.windowInner(), motion.openAlpha(0xFF)));
 
-		renderHeader(context, mouseX, hoverY, accent, ww);
-		renderSidebar(context, mouseX, hoverY, accent);
+		renderHeader(context, mouseX, hoverY, p, ww);
+		renderSidebar(context, mouseX, hoverY, p);
 
 		if (!listCollapsed) {
-			renderSearchBar(context, mouseX, hoverY, accent);
+			renderSearchBar(context, mouseX, hoverY, p);
 			int contentHeight = computeContentHeight();
 			int visibleHeight = listHeight();
 			scrollOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, contentHeight - visibleHeight)));
 
 			context.enableScissor(contentX(), listTop() + slide, windowX + ww, listTop() + visibleHeight + slide);
-			renderModuleList(context, mouseX, hoverY, accent);
+			renderModuleList(context, mouseX, hoverY, p);
 			context.disableScissor();
-			renderScrollbar(context, contentHeight, visibleHeight, accent);
-			renderFooter(context, mouseX, hoverY, accent);
+			renderScrollbar(context, contentHeight, visibleHeight, p);
+			renderFooter(context, mouseX, hoverY, accent, p);
 
 			int handleY = windowBottom() - RESIZE_HANDLE;
 			boolean resizeHovered = isHovered(mouseX, hoverY, windowX, handleY, ww, RESIZE_HANDLE);
 			GuiPaint.fill(context, windowX + 1, handleY, windowX + ww - 1, windowBottom() - 1,
-				resizeHovered ? GuiPaint.blend(accent, GuiPaint.BORDER, 0.55f) : GuiPaint.BORDER_SOFT);
+				resizeHovered ? GuiPaint.blend(p.fg(), p.border(), 0.55f) : p.borderSoft());
 		}
 
 		if (bindingModule != null || bindingSetting != null) {
@@ -218,8 +219,8 @@ public final class ClickGuiScreen extends Screen {
 			String text = "Press key to bind " + target + "  |  DEL clear  |  ESC cancel";
 			int textWidth = Minecraft.getInstance().font.width(text);
 			int boxX = width / 2 - textWidth / 2 - 10;
-			GuiPaint.inset(context, boxX, height - 28 - slide, textWidth + 20, 18, 0xF014141C, accent);
-			context.centeredText(Minecraft.getInstance().font, text, width / 2, height - 23 - slide, accent);
+			GuiPaint.inset(context, boxX, height - 28 - slide, textWidth + 20, 18, 0xF014141C, p.fg());
+			context.centeredText(Minecraft.getInstance().font, text, width / 2, height - 23 - slide, p.fg());
 		}
 
 		pose.popMatrix();
@@ -230,57 +231,58 @@ public final class ClickGuiScreen extends Screen {
 		}
 	}
 
-	private void renderHeader(GuiGraphicsExtractor context, int mouseX, int mouseY, int accent, int ww) {
+	private void renderHeader(GuiGraphicsExtractor context, int mouseX, int mouseY, GuiPaint.Palette p, int ww) {
 		GuiPaint.fill(context, windowX + 1, windowY + 2, windowX + ww - 1, windowY + HEADER_HEIGHT,
-			guiSettings.getHeaderColor() | 0xFF000000);
+			guiSettings.isAccentBlack() ? p.sidebarBg() : (guiSettings.getHeaderColor() | 0xFF000000));
 		if (isHovered(mouseX, mouseY, windowX, windowY, ww, HEADER_HEIGHT) && !draggingWindow) {
 			GuiPaint.fill(context, windowX + 1, windowY + 2, windowX + ww - 1, windowY + HEADER_HEIGHT, 0x14FFFFFF);
 		}
 		GuiPaint.fill(context, windowX + 1, windowY + HEADER_HEIGHT - 1, windowX + ww - 1, windowY + HEADER_HEIGHT,
-			GuiPaint.withAlpha(accent, 0x66));
+			GuiPaint.withAlpha(p.fg(), 0x66));
 
-		context.text(Minecraft.getInstance().font, VirulentClient.NAME, windowX + 8, windowY + 5, accent);
+		context.text(Minecraft.getInstance().font, VirulentClient.NAME, windowX + 8, windowY + 5, p.fg());
 		String version = "v" + VirulentClient.VERSION;
 		int versionWidth = Minecraft.getInstance().font.width(version);
-		context.text(Minecraft.getInstance().font, version, windowX + ww - versionWidth - 24, windowY + 5, GuiPaint.TEXT_MUTED);
+		context.text(Minecraft.getInstance().font, version, windowX + ww - versionWidth - 24, windowY + 5, p.textMuted());
 
 		int collapseX = windowX + ww - 16;
 		boolean collapseHovered = isHovered(mouseX, mouseY, collapseX, windowY + 4, 11, 11);
 		GuiPaint.inset(context, collapseX, windowY + 4, 11, 11,
-			collapseHovered ? GuiPaint.PANEL_HOVER : GuiPaint.PANEL_BG, GuiPaint.BORDER);
-		context.centeredText(Minecraft.getInstance().font, listCollapsed ? "+" : "-", collapseX + 5, windowY + 6, accent);
+			collapseHovered ? p.panelHover() : p.panelBg(), p.border());
+		context.centeredText(Minecraft.getInstance().font, listCollapsed ? "+" : "-", collapseX + 5, windowY + 6, p.fg());
 	}
 
-	private void renderSidebar(GuiGraphicsExtractor context, int mouseX, int mouseY, int accent) {
+	private void renderSidebar(GuiGraphicsExtractor context, int mouseX, int mouseY, GuiPaint.Palette p) {
 		int sidebarTop = windowY + HEADER_HEIGHT;
 		int sidebarBottom = listCollapsed ? windowY + HEADER_HEIGHT : windowBottom() - FOOTER_HEIGHT - RESIZE_HANDLE;
-		GuiPaint.fill(context, windowX + 1, sidebarTop, windowX + SIDEBAR_WIDTH, sidebarBottom, GuiPaint.SIDEBAR_BG);
-		GuiPaint.fill(context, windowX + SIDEBAR_WIDTH - 1, sidebarTop, windowX + SIDEBAR_WIDTH, sidebarBottom, GuiPaint.BORDER);
+		GuiPaint.fill(context, windowX + 1, sidebarTop, windowX + SIDEBAR_WIDTH, sidebarBottom, p.sidebarBg());
+		GuiPaint.fill(context, windowX + SIDEBAR_WIDTH - 1, sidebarTop, windowX + SIDEBAR_WIDTH, sidebarBottom, p.border());
 
 		int tabY = sidebarTop + 5;
 		for (Category category : Category.values()) {
 			boolean selected = guiSettings.getSelectedCategory() == category;
 			boolean rawHovered = isHovered(mouseX, mouseY, windowX + 4, tabY, SIDEBAR_WIDTH - 8, CATEGORY_TAB_HEIGHT);
 			float hover = motion.hover(category, rawHovered && !selected);
-			int idle = 0xFF101018;
 			int bg = selected
-				? GuiPaint.blend(accent, GuiPaint.PANEL_BG, 0.78f)
-				: GuiPaint.blend(idle, GuiPaint.PANEL_HOVER, hover);
+				? (guiSettings.isAccentBlack()
+					? p.panelHover()
+					: GuiPaint.blend(p.fg(), p.panelBg(), 0.78f))
+				: GuiPaint.blend(p.idleTab(), p.panelHover(), hover);
 			GuiPaint.fill(context, windowX + 4, tabY, windowX + SIDEBAR_WIDTH - 4, tabY + CATEGORY_TAB_HEIGHT, bg);
 			if (selected) {
-				GuiPaint.accentStrip(context, windowX + 4, tabY, CATEGORY_TAB_HEIGHT, accent);
+				GuiPaint.accentStrip(context, windowX + 4, tabY, CATEGORY_TAB_HEIGHT, p.fg());
 			}
 
 			String label = shortCategoryName(category);
 			context.text(Minecraft.getInstance().font, label, windowX + 10, tabY + 4,
-				selected ? accent : GuiPaint.TEXT_DIM);
+				selected ? p.fg() : p.textDim());
 
 			int enabled = enabledCount(category);
 			if (enabled > 0) {
 				String count = String.valueOf(enabled);
 				int countWidth = Minecraft.getInstance().font.width(count);
 				context.text(Minecraft.getInstance().font, count,
-					windowX + SIDEBAR_WIDTH - countWidth - 8, tabY + 4, accent);
+					windowX + SIDEBAR_WIDTH - countWidth - 8, tabY + 4, p.fg());
 			}
 
 			tabY += CATEGORY_TAB_HEIGHT + 3;
@@ -308,26 +310,26 @@ public final class ClickGuiScreen extends Screen {
 		return count;
 	}
 
-	private void renderSearchBar(GuiGraphicsExtractor context, int mouseX, int mouseY, int accent) {
+	private void renderSearchBar(GuiGraphicsExtractor context, int mouseX, int mouseY, GuiPaint.Palette p) {
 		int searchY = windowY + HEADER_HEIGHT + 2;
 		int sw = contentWidth() - 8;
 		int sx = contentX() + 4;
 		boolean hovered = isHovered(mouseX, mouseY, sx, searchY, sw, SEARCH_HEIGHT);
 		GuiPaint.inset(context, sx, searchY, sw, SEARCH_HEIGHT,
-			searchFocused || hovered ? GuiPaint.PANEL_HOVER : GuiPaint.PANEL_BG,
-			searchFocused ? accent : GuiPaint.BORDER);
+			searchFocused || hovered ? p.panelHover() : p.panelBg(),
+			searchFocused ? p.fg() : p.border());
 		String text = searchQuery.isEmpty() && !searchFocused ? "Search modules..." : searchQuery + (searchFocused ? "_" : "");
-		int color = searchQuery.isEmpty() && !searchFocused ? GuiPaint.TEXT_MUTED : GuiPaint.TEXT;
+		int color = searchQuery.isEmpty() && !searchFocused ? p.textMuted() : p.text();
 		context.text(Minecraft.getInstance().font, text, sx + 6, searchY + 4, color);
 	}
 
-	private void renderModuleList(GuiGraphicsExtractor context, int mouseX, int mouseY, int accent) {
+	private void renderModuleList(GuiGraphicsExtractor context, int mouseX, int mouseY, GuiPaint.Palette p) {
 		int cw = contentWidth();
 		int y = listTop() - scrollOffset;
 		List<Module> modules = visibleModules();
 
 		if (modules.isEmpty()) {
-			context.text(Minecraft.getInstance().font, "No modules found", contentX() + 10, y + 6, GuiPaint.TEXT_MUTED);
+			context.text(Minecraft.getInstance().font, "No modules found", contentX() + 10, y + 6, p.textMuted());
 			return;
 		}
 
@@ -336,38 +338,41 @@ public final class ClickGuiScreen extends Screen {
 			boolean enabled = module.isEnabled();
 			float hover = motion.hover(module, rawHovered && !enabled);
 			int background = enabled
-				? GuiPaint.blend(accent, GuiPaint.WINDOW_INNER, 0.82f)
-				: GuiPaint.blend(GuiPaint.PANEL_BG, GuiPaint.PANEL_HOVER, hover);
+				? (guiSettings.isAccentBlack()
+					? p.panelHover()
+					: GuiPaint.blend(p.fg(), p.windowInner(), 0.82f))
+				: GuiPaint.blend(p.panelBg(), p.panelHover(), hover);
 			GuiPaint.fill(context, contentX() + 4, y, contentX() + cw - 4, y + MODULE_HEIGHT, background);
 			if (enabled) {
-				GuiPaint.accentStrip(context, contentX() + 4, y, MODULE_HEIGHT, accent);
+				GuiPaint.accentStrip(context, contentX() + 4, y, MODULE_HEIGHT, p.fg());
 			}
 
 			int nameX = contentX() + 10;
 			if (isGlobalSearch()) {
 				String tag = shortCategoryName(module.getCategory()) + " ";
-				context.text(Minecraft.getInstance().font, tag, nameX, y + 4, GuiPaint.TEXT_MUTED);
+				context.text(Minecraft.getInstance().font, tag, nameX, y + 4, p.textMuted());
 				nameX += Minecraft.getInstance().font.width(tag);
 			}
 
 			context.text(Minecraft.getInstance().font, module.getName(), nameX, y + 4,
-				enabled ? accent : GuiPaint.TEXT);
+				enabled ? p.fg() : p.text());
 
 			int chipRight = contentX() + cw - 8;
-			GuiPaint.chipRight(context, enabled ? "ON" : "OFF", chipRight, y + 3, accent, enabled);
+			GuiPaint.chipRight(context, enabled ? "ON" : "OFF", chipRight, y + 3, p.fg(), enabled,
+				p.textMuted(), p.borderSoft());
 
 			if (guiSettings.showKeybinds() && module.getKeyBind() != GLFW.GLFW_KEY_UNKNOWN) {
 				String bind = KeybindUtil.getName(module.getKeyBind());
 				int bindWidth = Minecraft.getInstance().font.width(bind);
 				int stateWidth = Minecraft.getInstance().font.width(enabled ? "ON" : "OFF") + 6;
-				context.text(Minecraft.getInstance().font, bind, chipRight - stateWidth - bindWidth - 6, y + 4, GuiPaint.TEXT_DIM);
+				context.text(Minecraft.getInstance().font, bind, chipRight - stateWidth - bindWidth - 6, y + 4, p.textDim());
 			}
 
 			y += MODULE_HEIGHT + 1;
 		}
 	}
 
-	private void renderScrollbar(GuiGraphicsExtractor context, int contentHeight, int visibleHeight, int accent) {
+	private void renderScrollbar(GuiGraphicsExtractor context, int contentHeight, int visibleHeight, GuiPaint.Palette p) {
 		if (contentHeight <= visibleHeight) {
 			return;
 		}
@@ -375,12 +380,12 @@ public final class ClickGuiScreen extends Screen {
 		int trackX = windowX + windowWidth() - 5;
 		int trackY = listTop();
 		int trackH = visibleHeight;
-		GuiPaint.fill(context, trackX, trackY, trackX + 3, trackY + trackH, GuiPaint.TRACK);
+		GuiPaint.fill(context, trackX, trackY, trackX + 3, trackY + trackH, p.track());
 
 		double ratio = (double) visibleHeight / contentHeight;
 		int thumbH = Math.max(14, (int) (trackH * ratio));
 		int thumbY = trackY + (int) ((trackH - thumbH) * ((double) scrollOffset / (contentHeight - visibleHeight)));
-		GuiPaint.fill(context, trackX, thumbY, trackX + 3, thumbY + thumbH, accent | 0xFF000000);
+		GuiPaint.fill(context, trackX, thumbY, trackX + 3, thumbY + thumbH, p.fg() | 0xFF000000);
 	}
 
 	private record FooterLayout(
@@ -418,7 +423,9 @@ public final class ClickGuiScreen extends Screen {
 		int sortWidth = font.width(sortLabel);
 		String themeLabel = guiSettings.getLayoutStyle().getLabel();
 		int themeWidth = font.width(themeLabel);
-		String hudLabel = guiSettings.isHudVisible() ? "Hud" : "hud";
+		String hudLabel = !guiSettings.isHudVisible()
+			? "hud"
+			: (guiSettings.isHudBlack() ? "HudB" : "Hud");
 		int hudWidth = font.width(hudLabel);
 		String profilesLabel = "Cfg";
 		int profilesWidth = font.width(profilesLabel);
@@ -475,11 +482,11 @@ public final class ClickGuiScreen extends Screen {
 		);
 	}
 
-	private void renderFooter(GuiGraphicsExtractor context, int mouseX, int mouseY, int accent) {
+	private void renderFooter(GuiGraphicsExtractor context, int mouseX, int mouseY, int accent, GuiPaint.Palette p) {
 		int footerY = listTop() + listHeight();
 		int ww = windowWidth();
-		GuiPaint.fill(context, windowX + 1, footerY, windowX + ww - 1, footerY + FOOTER_HEIGHT, GuiPaint.SIDEBAR_BG);
-		GuiPaint.fill(context, windowX + 1, footerY, windowX + ww - 1, footerY + 1, GuiPaint.withAlpha(accent, 0x44));
+		GuiPaint.fill(context, windowX + 1, footerY, windowX + ww - 1, footerY + FOOTER_HEIGHT, p.sidebarBg());
+		GuiPaint.fill(context, windowX + 1, footerY, windowX + ww - 1, footerY + 1, GuiPaint.withAlpha(p.fg(), 0x44));
 
 		FooterLayout layout = footerLayout(footerY);
 		footerSliderX = layout.sliderX();
@@ -488,96 +495,100 @@ public final class ClickGuiScreen extends Screen {
 		String hint = "L:on  R:cfg  M:bind";
 		int hintX = contentX() + 6;
 		if (hintX + font.width(hint) < layout.controlsLeft() - 4) {
-			context.text(font, hint, hintX, footerY + 5, GuiPaint.TEXT_MUTED);
+			context.text(font, hint, hintX, footerY + 5, p.textMuted());
 		}
 
 		GuiPaint.inset(context, layout.colorX(), layout.colorY(), FOOTER_COLOR_SIZE, FOOTER_COLOR_SIZE,
-			accent | 0xFF000000, GuiPaint.BORDER);
+			accent | 0xFF000000, guiSettings.isAccentBlack() ? 0xFFE8E8F0 : p.border());
 
 		int sliderDrawX = draggingWidth ? widthDragAnchorX : layout.sliderX();
 		double widthPercent = (windowWidth() - 200) / 200.0;
-		GuiPaint.slider(context, sliderDrawX, layout.sliderY() - 1, FOOTER_SLIDER_WIDTH, widthPercent, accent);
+		GuiPaint.slider(context, sliderDrawX, layout.sliderY() - 1, FOOTER_SLIDER_WIDTH, widthPercent, p.fg(), p.track());
 
-		context.text(font, guiSettings.getLayoutStyle().getLabel(), layout.themeX(), footerY + 5, accent);
+		context.text(font, guiSettings.getLayoutStyle().getLabel(), layout.themeX(), footerY + 5, p.fg());
 		if (layout.sortWidth() > 0) {
-			context.text(font, guiSettings.getHudSort().getLabel(), layout.sortX(), footerY + 5, accent);
+			context.text(font, guiSettings.getHudSort().getLabel(), layout.sortX(), footerY + 5, p.fg());
 		}
 		context.text(
 			font,
-			guiSettings.isHudVisible() ? "Hud" : "hud",
+			guiSettings.isHudVisible() ? (guiSettings.isHudBlack() ? "HudB" : "Hud") : "hud",
 			layout.hudX(),
 			footerY + 5,
-			guiSettings.isHudVisible() ? accent : GuiPaint.TEXT_MUTED
+			!guiSettings.isHudVisible()
+				? p.textMuted()
+				: (guiSettings.isHudBlack() ? 0xFFFFFFFF : p.fg())
 		);
 		context.text(
 			font,
 			guiSettings.showDescriptions() ? "Desc" : "desc",
 			layout.descX(),
 			footerY + 5,
-			guiSettings.showDescriptions() ? accent : GuiPaint.TEXT_MUTED
+			guiSettings.showDescriptions() ? p.fg() : p.textMuted()
 		);
 		context.text(
 			font,
 			guiSettings.showKeybinds() ? "Keys" : "keys",
 			layout.keysX(),
 			footerY + 5,
-			guiSettings.showKeybinds() ? accent : GuiPaint.TEXT_MUTED
+			guiSettings.showKeybinds() ? p.fg() : p.textMuted()
 		);
-		context.text(font, "Cfg", layout.profilesX(), footerY + 5, accent);
+		context.text(font, "Cfg", layout.profilesX(), footerY + 5, p.fg());
 	}
 
-	private void renderSetting(GuiGraphicsExtractor context, Setting<?> setting, int sx, int sy, int sw, int mouseX, int mouseY, int accent) {
+	private void renderSetting(GuiGraphicsExtractor context, Setting<?> setting, int sx, int sy, int sw, int mouseX, int mouseY, GuiPaint.Palette p) {
 		boolean hovered = isHovered(mouseX, mouseY, sx, sy, sw, SETTING_HEIGHT);
-		GuiPaint.fill(context, sx, sy, sx + sw, sy + SETTING_HEIGHT, hovered ? GuiPaint.PANEL_HOVER : GuiPaint.PANEL_BG);
+		GuiPaint.fill(context, sx, sy, sx + sw, sy + SETTING_HEIGHT, hovered ? p.panelHover() : p.panelBg());
 
 		if (setting instanceof BooleanSetting booleanSetting) {
-			context.text(Minecraft.getInstance().font, setting.getName(), sx + 5, sy + 3, GuiPaint.TEXT);
-			GuiPaint.toggle(context, sx + sw - 22, sy + 3, booleanSetting.getValue(), accent);
+			context.text(Minecraft.getInstance().font, setting.getName(), sx + 5, sy + 3, p.text());
+			GuiPaint.toggle(context, sx + sw - 22, sy + 3, booleanSetting.getValue(), p.fg(), p.border());
 			return;
 		}
 
 		if (setting instanceof NumberSetting numberSetting) {
-			context.text(Minecraft.getInstance().font, setting.getName(), sx + 5, sy + 3, GuiPaint.TEXT);
+			context.text(Minecraft.getInstance().font, setting.getName(), sx + 5, sy + 3, p.text());
 			int sliderX = sx + sw / 2;
 			int sliderW = sw / 2 - 8;
 			double range = numberSetting.getMax() - numberSetting.getMin();
 			double percent = range <= 0 ? 0 : (numberSetting.getValue() - numberSetting.getMin()) / range;
-			GuiPaint.slider(context, sliderX, sy + 5, sliderW, percent, accent);
+			GuiPaint.slider(context, sliderX, sy + 5, sliderW, percent, p.fg(), p.track());
 			String valueText = String.format("%.1f", numberSetting.getValue());
 			context.text(Minecraft.getInstance().font, valueText,
-				sliderX + sliderW - Minecraft.getInstance().font.width(valueText), sy + 1, accent);
+				sliderX + sliderW - Minecraft.getInstance().font.width(valueText), sy + 1, p.fg());
 			return;
 		}
 
 		if (setting instanceof ModeSetting modeSetting) {
-			context.text(Minecraft.getInstance().font, setting.getName(), sx + 5, sy + 3, GuiPaint.TEXT);
+			context.text(Minecraft.getInstance().font, setting.getName(), sx + 5, sy + 3, p.text());
 			String value = modeSetting.getValue();
-			GuiPaint.chipRight(context, value, sx + sw - 4, sy + 2, accent, true);
+			GuiPaint.chipRight(context, value, sx + sw - 4, sy + 2, p.fg(), true, p.textMuted(), p.borderSoft());
 			return;
 		}
 
 		if (setting instanceof KeybindSetting keybindSetting) {
 			String value = bindingSetting == keybindSetting ? "..." : KeybindUtil.getName(keybindSetting.getValue());
-			context.text(Minecraft.getInstance().font, setting.getName(), sx + 5, sy + 3, GuiPaint.TEXT);
-			GuiPaint.chipRight(context, value, sx + sw - 4, sy + 2, accent, true);
+			context.text(Minecraft.getInstance().font, setting.getName(), sx + 5, sy + 3, p.text());
+			GuiPaint.chipRight(context, value, sx + sw - 4, sy + 2, p.fg(), true, p.textMuted(), p.borderSoft());
 			return;
 		}
 
 		if (setting instanceof BlockListSetting blockListSetting) {
-			context.text(Minecraft.getInstance().font, setting.getName(), sx + 5, sy + 3, GuiPaint.TEXT);
-			GuiPaint.chipRight(context, "Select (" + blockListSetting.size() + ")", sx + sw - 4, sy + 2, accent, true);
+			context.text(Minecraft.getInstance().font, setting.getName(), sx + 5, sy + 3, p.text());
+			GuiPaint.chipRight(context, "Select (" + blockListSetting.size() + ")", sx + sw - 4, sy + 2, p.fg(), true,
+				p.textMuted(), p.borderSoft());
 			return;
 		}
 
 		if (setting instanceof ActionSetting actionSetting) {
-			context.text(Minecraft.getInstance().font, setting.getName(), sx + 5, sy + 3, GuiPaint.TEXT);
-			GuiPaint.chipRight(context, actionSetting.getLabel(), sx + sw - 4, sy + 2, accent, true);
+			context.text(Minecraft.getInstance().font, setting.getName(), sx + 5, sy + 3, p.text());
+			GuiPaint.chipRight(context, actionSetting.getLabel(), sx + sw - 4, sy + 2, p.fg(), true,
+				p.textMuted(), p.borderSoft());
 			return;
 		}
 
 		if (setting instanceof BlockEspConfigSetting || setting instanceof BlockEspConfigsSetting) {
-			context.text(Minecraft.getInstance().font, setting.getName(), sx + 5, sy + 3, GuiPaint.TEXT);
-			GuiPaint.chipRight(context, "Edit", sx + sw - 4, sy + 2, accent, true);
+			context.text(Minecraft.getInstance().font, setting.getName(), sx + 5, sy + 3, p.text());
+			GuiPaint.chipRight(context, "Edit", sx + sw - 4, sy + 2, p.fg(), true, p.textMuted(), p.borderSoft());
 		}
 	}
 
@@ -660,7 +671,7 @@ public final class ClickGuiScreen extends Screen {
 
 		searchFocused = false;
 
-		if (handleFooterClick(mouseX, mouseY)) {
+		if (handleFooterClick(mouseX, mouseY, button)) {
 			return true;
 		}
 
@@ -693,7 +704,7 @@ public final class ClickGuiScreen extends Screen {
 		return false;
 	}
 
-	private boolean handleFooterClick(double mouseX, double mouseY) {
+	private boolean handleFooterClick(double mouseX, double mouseY, int button) {
 		if (listCollapsed) {
 			return false;
 		}
@@ -705,6 +716,15 @@ public final class ClickGuiScreen extends Screen {
 		}
 
 		FooterLayout layout = footerLayout(footerY);
+
+		if (button == 1 && isHovered(mouseX, mouseY, layout.hudX(), footerY, layout.hudWidth(), FOOTER_HEIGHT)) {
+			guiSettings.toggleHudBlack();
+			return true;
+		}
+
+		if (button != 0) {
+			return false;
+		}
 
 		if (isHovered(mouseX, mouseY, layout.colorX(), layout.colorY(), FOOTER_COLOR_SIZE, FOOTER_COLOR_SIZE)) {
 			guiSettings.cycleAccentPreset();

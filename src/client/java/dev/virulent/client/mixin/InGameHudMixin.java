@@ -1,5 +1,6 @@
 package dev.virulent.client.mixin;
 
+import dev.virulent.client.module.modules.performance.FpsBooster;
 import dev.virulent.client.module.modules.render.NoFire;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -13,7 +14,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class InGameHudMixin {
 	@Inject(method = "extractTextureOverlay", at = @At("HEAD"), cancellable = true)
 	private void virulent$noFire(GuiGraphicsExtractor context, Identifier texture, float opacity, CallbackInfo ci) {
-		if (NoFire.isActive() && texture != null && texture.getPath().contains("fire")) {
+		if (texture == null) {
+			return;
+		}
+		String path = texture.getPath();
+		if (NoFire.isActive() && path.contains("fire")) {
+			ci.cancel();
+			return;
+		}
+		if (FpsBooster.hidePumpkinOverlay() && path.contains("pumpkin")) {
 			ci.cancel();
 		}
 	}

@@ -19,13 +19,16 @@ import dev.virulent.client.module.modules.movement.AirJump;
 import dev.virulent.client.module.modules.movement.BoatFly;
 import dev.virulent.client.module.modules.movement.Flight;
 import dev.virulent.client.module.modules.movement.Jesus;
+import dev.virulent.client.module.modules.movement.NoClip;
 import dev.virulent.client.module.modules.movement.NoFall;
 import dev.virulent.client.module.modules.movement.NoSlow;
 import dev.virulent.client.module.modules.movement.SafeWalk;
 import dev.virulent.client.module.modules.movement.Speed;
 import dev.virulent.client.module.modules.movement.Sprint;
 import dev.virulent.client.module.modules.movement.Step;
+import dev.virulent.client.module.modules.performance.FpsBooster;
 import dev.virulent.client.module.modules.performance.FpsHud;
+import dev.virulent.client.module.modules.player.AntiHunger;
 import dev.virulent.client.module.modules.player.AutoTool;
 import dev.virulent.client.module.modules.player.FastBreak;
 import dev.virulent.client.module.modules.player.FastPlace;
@@ -41,6 +44,7 @@ import dev.virulent.client.module.modules.render.ESP;
 import dev.virulent.client.module.modules.render.Fullbright;
 import dev.virulent.client.module.modules.render.HandView;
 import dev.virulent.client.module.modules.render.ItemEsp;
+import dev.virulent.client.module.modules.render.Nametags;
 import dev.virulent.client.module.modules.render.NoFire;
 import dev.virulent.client.module.modules.render.NoHurtCam;
 import dev.virulent.client.module.modules.render.NoWeather;
@@ -69,6 +73,7 @@ public final class ModuleManager {
 			new AutoTotem(),
 			new Sprint(),
 			new Flight(),
+			new NoClip(),
 			new BoatFly(),
 			new Speed(),
 			new Step(),
@@ -80,6 +85,7 @@ public final class ModuleManager {
 			new Fullbright(),
 			new ESP(),
 			new ItemEsp(),
+			new Nametags(),
 			new Tracers(),
 			new BaseFinder(),
 			new BlockEsp(),
@@ -95,6 +101,7 @@ public final class ModuleManager {
 			new FastBreak(),
 			new MultiTask(),
 			new AutoTool(),
+			new AntiHunger(),
 			new Scaffold(),
 			new TreeBot(),
 			new Tunneler(),
@@ -106,6 +113,7 @@ public final class ModuleManager {
 			new SeedCracker(),
 			new Friends(),
 			new FpsHud(),
+			new FpsBooster(),
 			new Panic()
 		);
 	}

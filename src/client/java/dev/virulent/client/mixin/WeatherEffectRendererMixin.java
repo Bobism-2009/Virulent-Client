@@ -1,5 +1,6 @@
 package dev.virulent.client.mixin;
 
+import dev.virulent.client.module.modules.performance.FpsBooster;
 import dev.virulent.client.module.modules.render.NoWeather;
 import net.minecraft.client.Camera;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -17,7 +18,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class WeatherEffectRendererMixin {
 	@Inject(method = "extractRenderState", at = @At("HEAD"), cancellable = true)
 	private void virulent$noWeatherExtract(Level level, int ticks, float partialTick, Vec3 cameraPos, WeatherRenderState state, CallbackInfo ci) {
-		if (NoWeather.isActive()) {
+		if (NoWeather.isActive() || FpsBooster.hideWeather()) {
 			state.reset();
 			ci.cancel();
 		}
@@ -25,7 +26,7 @@ public class WeatherEffectRendererMixin {
 
 	@Inject(method = "tickRainParticles", at = @At("HEAD"), cancellable = true)
 	private void virulent$noWeatherParticles(ClientLevel level, Camera camera, int ticks, ParticleStatus status, int range, CallbackInfo ci) {
-		if (NoWeather.isActive()) {
+		if (NoWeather.isActive() || FpsBooster.hideWeather()) {
 			ci.cancel();
 		}
 	}

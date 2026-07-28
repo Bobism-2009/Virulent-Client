@@ -2,6 +2,7 @@ package dev.virulent.client.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import dev.virulent.client.module.modules.movement.Flight;
+import dev.virulent.client.module.modules.movement.NoClip;
 import dev.virulent.client.module.modules.movement.NoFall;
 import dev.virulent.client.module.modules.movement.NoSlow;
 import net.minecraft.client.player.LocalPlayer;
@@ -48,7 +49,7 @@ public class LocalPlayerMixin {
 		at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;onGround()Z", ordinal = 1)
 	)
 	private boolean virulent$flightIgnoreGroundCancel(boolean onGround) {
-		return onGround && !Flight.isActive();
+		return onGround && !Flight.isActive() && !NoClip.isActive();
 	}
 
 	/** Keep sprint available while using items (food, bow, shields, etc.). */
@@ -62,7 +63,7 @@ public class LocalPlayerMixin {
 	/** Re-assert flight after aiStep in case jump-toggle or packets cleared it. */
 	@Inject(method = "aiStep", at = @At("RETURN"))
 	private void virulent$keepFlight(CallbackInfo ci) {
-		if (!Flight.isActive()) {
+		if (!Flight.isActive() && !NoClip.isActive()) {
 			return;
 		}
 		LocalPlayer self = (LocalPlayer) (Object) this;
@@ -70,6 +71,10 @@ public class LocalPlayerMixin {
 		abilities.mayfly = true;
 		if (!abilities.flying) {
 			abilities.flying = true;
+		}
+		if (NoClip.isActive()) {
+			self.noPhysics = true;
+			self.setOnGround(false);
 		}
 	}
 

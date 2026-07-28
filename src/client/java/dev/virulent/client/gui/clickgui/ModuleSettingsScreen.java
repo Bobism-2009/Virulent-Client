@@ -69,20 +69,21 @@ public final class ModuleSettingsScreen extends Screen {
 		int panelX = (width - panelW) / 2;
 		int panelY = (height - panelH) / 2 + slide;
 		int accent = accent();
+		GuiPaint.Palette p = GuiPaint.palette(accent, gui().isAccentBlack());
 
 		var pose = context.pose();
 		pose.pushMatrix();
 		pose.translate(0.0f, 0.0f);
 
 		GuiPaint.inset(context, panelX, panelY, panelW, panelH,
-			GuiPaint.withAlpha(GuiPaint.WINDOW_BG, Math.max(0xE0, motion.openAlpha(0xF0))),
-			GuiPaint.withAlpha(GuiPaint.BORDER, motion.openAlpha(0xFF)));
-		GuiPaint.topAccent(context, panelX, panelY, panelW, accent);
+			GuiPaint.withAlpha(p.windowBg(), Math.max(0xE0, motion.openAlpha(0xF0))),
+			GuiPaint.withAlpha(p.border(), motion.openAlpha(0xFF)));
+		GuiPaint.topAccent(context, panelX, panelY, panelW, p.fg());
 
 		var font = Minecraft.getInstance().font;
-		context.text(font, module.getName(), panelX + PAD, panelY + 6, accent);
+		context.text(font, module.getName(), panelX + PAD, panelY + 6, p.fg());
 		context.text(font, module.getCategory().getDisplayName() + "  ·  Settings",
-			panelX + PAD, panelY + 17, GuiPaint.TEXT_MUTED);
+			panelX + PAD, panelY + 17, p.textMuted());
 
 		boolean enabled = module.isEnabled();
 		String state = enabled ? "ON" : "OFF";
@@ -90,14 +91,19 @@ public final class ModuleSettingsScreen extends Screen {
 		int stateX = panelX + panelW - PAD - stateW - 52;
 		boolean stateHover = mouseX >= stateX && mouseX < stateX + stateW
 			&& mouseY >= panelY + 6 && mouseY < panelY + 22;
+		int stateBg = stateHover
+			? p.panelHover()
+			: (enabled
+				? (gui().isAccentBlack() ? p.panelHover() : GuiPaint.blend(p.fg(), p.panelBg(), 0.7f))
+				: p.sidebarBg());
 		GuiPaint.inset(context, stateX, panelY + 6, stateW, 16,
-			stateHover ? GuiPaint.PANEL_HOVER : (enabled ? GuiPaint.blend(accent, GuiPaint.PANEL_BG, 0.7f) : GuiPaint.SIDEBAR_BG),
-			enabled ? accent : GuiPaint.BORDER);
+			stateBg,
+			enabled ? p.fg() : p.border());
 		context.centeredText(font, state, stateX + stateW / 2, panelY + 10,
-			enabled ? accent : GuiPaint.TEXT_DIM);
+			enabled ? p.fg() : p.textDim());
 
 		drawButton(context, panelX + panelW - PAD - 48, panelY + 6, 48, "Done", mouseX, mouseY,
-			0xFF284028, 0xFF88FF88);
+			0xFF284028, 0xFF88FF88, p);
 
 		int bodyTop = panelY + 28;
 		int bodyBottom = panelY + panelH - 10;
@@ -106,7 +112,7 @@ public final class ModuleSettingsScreen extends Screen {
 		scroll = Math.max(0, Math.min(scroll, Math.max(0, contentH - bodyH)));
 
 		GuiPaint.inset(context, panelX + PAD, bodyTop, panelW - PAD * 2, bodyH,
-			GuiPaint.WINDOW_INNER, GuiPaint.BORDER_SOFT);
+			p.windowInner(), p.borderSoft());
 
 		context.enableScissor(panelX + PAD, bodyTop, panelX + panelW - PAD, bodyBottom);
 		int y = bodyTop + 4 - scroll;
@@ -114,21 +120,21 @@ public final class ModuleSettingsScreen extends Screen {
 		int rowW = panelW - PAD * 2 - 8;
 
 		if (gui().showDescriptions()) {
-			drawWrapped(context, module.getDescription(), rowX, y, rowW, GuiPaint.TEXT_DIM);
+			drawWrapped(context, module.getDescription(), rowX, y, rowW, p.textDim());
 			y += DESC_H * 2 + 2;
 		}
 
 		boolean bindHover = mouseX >= rowX && mouseX < rowX + rowW && mouseY >= y && mouseY < y + KEYBIND_H;
 		GuiPaint.fill(context, rowX, y, rowX + rowW, y + KEYBIND_H,
-			bindHover ? GuiPaint.PANEL_HOVER : GuiPaint.PANEL_BG);
+			bindHover ? p.panelHover() : p.panelBg());
 		String bindText = bindingModuleKey
 			? "Bind: ..."
 			: "Bind: " + KeybindUtil.getName(module.getKeyBind());
-		context.text(font, bindText, rowX + 5, y + 3, accent);
+		context.text(font, bindText, rowX + 5, y + 3, p.fg());
 		y += KEYBIND_H + 2;
 
 		for (Setting<?> setting : module.getSettings()) {
-			renderSetting(context, setting, rowX, y, rowW, mouseX, mouseY, accent);
+			renderSetting(context, setting, rowX, y, rowW, mouseX, mouseY, p);
 			y += ROW_H + 1;
 		}
 
@@ -142,11 +148,11 @@ public final class ModuleSettingsScreen extends Screen {
 
 		if (contentH > bodyH) {
 			int trackX = panelX + panelW - PAD - 4;
-			GuiPaint.fill(context, trackX, bodyTop + 2, trackX + 2, bodyBottom - 2, GuiPaint.TRACK);
+			GuiPaint.fill(context, trackX, bodyTop + 2, trackX + 2, bodyBottom - 2, p.track());
 			double ratio = (double) bodyH / contentH;
 			int thumbH = Math.max(12, (int) (bodyH * ratio));
 			int thumbY = bodyTop + 2 + (int) ((bodyH - 4 - thumbH) * ((double) scroll / (contentH - bodyH)));
-			GuiPaint.fill(context, trackX, thumbY, trackX + 2, thumbY + thumbH, accent | 0xFF000000);
+			GuiPaint.fill(context, trackX, thumbY, trackX + 2, thumbY + thumbH, p.fg() | 0xFF000000);
 		}
 
 		if (bindingModuleKey || bindingSetting != null) {
@@ -154,8 +160,8 @@ public final class ModuleSettingsScreen extends Screen {
 			String text = "Press key to bind " + target + "  |  DEL clear  |  ESC cancel";
 			int textW = font.width(text);
 			int boxX = width / 2 - textW / 2 - 10;
-			GuiPaint.inset(context, boxX, height - 28, textW + 20, 18, 0xF014141C, accent);
-			context.centeredText(font, text, width / 2, height - 23, accent);
+			GuiPaint.inset(context, boxX, height - 28, textW + 20, 18, 0xF014141C, p.fg());
+			context.centeredText(font, text, width / 2, height - 23, p.fg());
 		}
 
 		pose.popMatrix();
@@ -185,52 +191,55 @@ public final class ModuleSettingsScreen extends Screen {
 		int w,
 		int mouseX,
 		int mouseY,
-		int accent
+		GuiPaint.Palette p
 	) {
 		boolean hover = mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + ROW_H;
-		GuiPaint.fill(context, x, y, x + w, y + ROW_H, hover ? GuiPaint.PANEL_HOVER : GuiPaint.PANEL_BG);
+		GuiPaint.fill(context, x, y, x + w, y + ROW_H, hover ? p.panelHover() : p.panelBg());
 		var font = Minecraft.getInstance().font;
 
 		if (setting instanceof BooleanSetting booleanSetting) {
-			context.text(font, setting.getName(), x + 5, y + 3, GuiPaint.TEXT);
-			GuiPaint.toggle(context, x + w - 22, y + 3, booleanSetting.getValue(), accent);
+			context.text(font, setting.getName(), x + 5, y + 3, p.text());
+			GuiPaint.toggle(context, x + w - 22, y + 3, booleanSetting.getValue(), p.fg(), p.border());
 			return;
 		}
 		if (setting instanceof NumberSetting numberSetting) {
-			context.text(font, setting.getName(), x + 5, y + 3, GuiPaint.TEXT);
+			context.text(font, setting.getName(), x + 5, y + 3, p.text());
 			int sliderX = x + w / 2;
 			int sliderW = w / 2 - 8;
 			double range = numberSetting.getMax() - numberSetting.getMin();
 			double percent = range <= 0 ? 0 : (numberSetting.getValue() - numberSetting.getMin()) / range;
-			GuiPaint.slider(context, sliderX, y + 5, sliderW, percent, accent);
+			GuiPaint.slider(context, sliderX, y + 5, sliderW, percent, p.fg(), p.track());
 			String valueText = String.format("%.1f", numberSetting.getValue());
-			context.text(font, valueText, sliderX + sliderW - font.width(valueText), y + 1, accent);
+			context.text(font, valueText, sliderX + sliderW - font.width(valueText), y + 1, p.fg());
 			return;
 		}
 		if (setting instanceof ModeSetting modeSetting) {
-			context.text(font, setting.getName(), x + 5, y + 3, GuiPaint.TEXT);
-			GuiPaint.chipRight(context, modeSetting.getValue(), x + w - 4, y + 2, accent, true);
+			context.text(font, setting.getName(), x + 5, y + 3, p.text());
+			GuiPaint.chipRight(context, modeSetting.getValue(), x + w - 4, y + 2, p.fg(), true,
+				p.textMuted(), p.borderSoft());
 			return;
 		}
 		if (setting instanceof KeybindSetting keybindSetting) {
 			String value = bindingSetting == keybindSetting ? "..." : KeybindUtil.getName(keybindSetting.getValue());
-			context.text(font, setting.getName(), x + 5, y + 3, GuiPaint.TEXT);
-			GuiPaint.chipRight(context, value, x + w - 4, y + 2, accent, true);
+			context.text(font, setting.getName(), x + 5, y + 3, p.text());
+			GuiPaint.chipRight(context, value, x + w - 4, y + 2, p.fg(), true, p.textMuted(), p.borderSoft());
 			return;
 		}
 		if (setting instanceof BlockListSetting blockListSetting) {
-			context.text(font, setting.getName(), x + 5, y + 3, GuiPaint.TEXT);
-			GuiPaint.chipRight(context, "Select (" + blockListSetting.size() + ")", x + w - 4, y + 2, accent, true);
+			context.text(font, setting.getName(), x + 5, y + 3, p.text());
+			GuiPaint.chipRight(context, "Select (" + blockListSetting.size() + ")", x + w - 4, y + 2, p.fg(), true,
+				p.textMuted(), p.borderSoft());
 			return;
 		}
 		if (setting instanceof ActionSetting actionSetting) {
-			context.text(font, setting.getName(), x + 5, y + 3, GuiPaint.TEXT);
-			GuiPaint.chipRight(context, actionSetting.getLabel(), x + w - 4, y + 2, accent, true);
+			context.text(font, setting.getName(), x + 5, y + 3, p.text());
+			GuiPaint.chipRight(context, actionSetting.getLabel(), x + w - 4, y + 2, p.fg(), true,
+				p.textMuted(), p.borderSoft());
 			return;
 		}
 		if (setting instanceof BlockEspConfigSetting || setting instanceof BlockEspConfigsSetting) {
-			context.text(font, setting.getName(), x + 5, y + 3, GuiPaint.TEXT);
-			GuiPaint.chipRight(context, "Edit", x + w - 4, y + 2, accent, true);
+			context.text(font, setting.getName(), x + 5, y + 3, p.text());
+			GuiPaint.chipRight(context, "Edit", x + w - 4, y + 2, p.fg(), true, p.textMuted(), p.borderSoft());
 		}
 	}
 
@@ -243,10 +252,11 @@ public final class ModuleSettingsScreen extends Screen {
 		int mouseX,
 		int mouseY,
 		int bg,
-		int fg
+		int fg,
+		GuiPaint.Palette p
 	) {
 		boolean hover = mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + 16;
-		GuiPaint.inset(context, x, y, w, 16, hover ? GuiPaint.PANEL_HOVER : bg, GuiPaint.BORDER);
+		GuiPaint.inset(context, x, y, w, 16, hover ? p.panelHover() : bg, p.border());
 		var font = Minecraft.getInstance().font;
 		context.text(font, label, x + (w - font.width(label)) / 2, y + 4, fg);
 	}

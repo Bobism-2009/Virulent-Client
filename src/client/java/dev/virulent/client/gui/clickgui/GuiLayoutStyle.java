@@ -10,7 +10,8 @@ package dev.virulent.client.gui.clickgui;
  */
 public enum GuiLayoutStyle {
 	DEFAULT("Default", 0xFF4CFF66, 0xFF101018),
-	METEOR("Meteor", 0xFF5CC8FF, 0xFF121A24),
+	/** Meteor purple accent (145, 61, 226) — solid header like real Meteor Client. */
+	METEOR("Meteor", 0xFF913DE2, 0xFF913DE2),
 	WURST("Wurst", 0xFFFFD24A, 0xFF3A3A3A);
 
 	private final String label;

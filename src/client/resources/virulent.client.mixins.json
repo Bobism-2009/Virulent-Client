@@ -21,6 +21,7 @@
 		"BlockStateMixin",
 		"ClientPacketListenerMixin",
 		"ConnectionMixin",
+		"ServerboundMovePlayerPacketAccessor",
 		"DisconnectedScreenAccessor",
 		"ScreenMixin",
 		"CameraMixin",

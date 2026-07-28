@@ -1,13 +1,16 @@
 package dev.virulent.client.mixin;
 
+import dev.virulent.client.module.modules.performance.FpsBooster;
 import dev.virulent.client.module.modules.render.BlockEsp;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(ClientLevel.class)
@@ -46,5 +49,19 @@ public class ClientLevelMixin {
 		}
 		BlockEsp.onBlockChanged(pos, virulent$previousState, state);
 		virulent$previousState = null;
+	}
+
+	@Inject(method = "addDestroyBlockEffect", at = @At("HEAD"), cancellable = true)
+	private void virulent$noDestroyParticles(BlockPos pos, BlockState blockState, CallbackInfo ci) {
+		if (FpsBooster.hideBreakParticles()) {
+			ci.cancel();
+		}
+	}
+
+	@Inject(method = "addBreakingBlockEffect", at = @At("HEAD"), cancellable = true)
+	private void virulent$noBreakingParticles(BlockPos pos, Direction direction, CallbackInfo ci) {
+		if (FpsBooster.hideBreakParticles()) {
+			ci.cancel();
+		}
 	}
 }

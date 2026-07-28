@@ -34,6 +34,7 @@ public final class GuiSettings {
 	private int hudY = 4;
 	private HudSort hudSort = HudSort.LENGTH;
 	private boolean hudVisible = true;
+	private boolean hudBlack = false;
 	private final CategoryPanelState categoryPanels = new CategoryPanelState();
 
 	private long saveDeadline;
@@ -148,7 +149,16 @@ public final class GuiSettings {
 	}
 
 	public void cycleAccentPreset() {
-		int[] presets = {0xFF39FF14, 0xFF00D4FF, 0xFFFF4444, 0xFFB026FF, 0xFFFFAA00, 0xFFFFFFFF, 0xFFFFCC00};
+		int[] presets = {
+			0xFF39FF14,
+			0xFF00D4FF,
+			0xFFFF4444,
+			0xFFB026FF,
+			0xFFFFAA00,
+			0xFFFFFFFF,
+			0xFFFFCC00,
+			0xFF000000
+		};
 		for (int i = 0; i < presets.length; i++) {
 			if (presets[i] == accentColor) {
 				accentColor = presets[(i + 1) % presets.length];
@@ -158,6 +168,15 @@ public final class GuiSettings {
 		}
 		accentColor = presets[0];
 		scheduleSave();
+	}
+
+	/** True when the accent is black / near-black (HUD should use white text). */
+	public boolean isAccentBlack() {
+		int rgb = accentColor & 0x00FFFFFF;
+		int r = (rgb >> 16) & 0xFF;
+		int g = (rgb >> 8) & 0xFF;
+		int b = rgb & 0xFF;
+		return r + g + b < 48;
 	}
 
 	public void toggleDescriptions() {
@@ -199,6 +218,15 @@ public final class GuiSettings {
 
 	public void toggleHudVisible() {
 		hudVisible = !hudVisible;
+		scheduleSave();
+	}
+
+	public boolean isHudBlack() {
+		return hudBlack;
+	}
+
+	public void toggleHudBlack() {
+		hudBlack = !hudBlack;
 		scheduleSave();
 	}
 
@@ -261,6 +289,9 @@ public final class GuiSettings {
 				}
 				if (hud.has("visible")) {
 					hudVisible = hud.get("visible").getAsBoolean();
+				}
+				if (hud.has("black")) {
+					hudBlack = hud.get("black").getAsBoolean();
 				}
 			}
 
@@ -350,6 +381,7 @@ public final class GuiSettings {
 		hud.addProperty("y", hudY);
 		hud.addProperty("sort", hudSort.name());
 		hud.addProperty("visible", hudVisible);
+		hud.addProperty("black", hudBlack);
 		json.add("hud", hud);
 
 		JsonObject window = new JsonObject();

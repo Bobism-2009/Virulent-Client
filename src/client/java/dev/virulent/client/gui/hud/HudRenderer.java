@@ -76,15 +76,20 @@ public final class HudRenderer {
 		}
 
 		GuiGraphicsExtractor context = event.getContext();
-		int accent = guiSettings.getAccentColor() | 0xFF000000;
+		boolean black = guiSettings.isHudBlack() || guiSettings.isAccentBlack();
+		int textColor = black ? 0xFFFFFFFF : (guiSettings.getAccentColor() | 0xFF000000);
+		int rowBg = black ? 0xEE000000 : 0xAA101018;
 		int x = guiSettings.getHudX();
 		int y = guiSettings.getHudY();
 
 		for (Module module : enabled) {
 			String text = module.getName();
 			int width = client.font.width(text);
-			context.fill(x, y - 1, x + 4 + width, y + 9, 0xAA101018);
-			context.text(client.font, text, x + 2, y, accent);
+			context.fill(x, y - 1, x + 4 + width, y + 9, rowBg);
+			if (black) {
+				context.fill(x, y - 1, x + 1, y + 9, 0xFFFFFFFF);
+			}
+			context.text(client.font, text, x + 2, y, textColor);
 			y += ROW_HEIGHT;
 		}
 

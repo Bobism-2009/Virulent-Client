@@ -1,6 +1,9 @@
 package dev.virulent.client.gui.clickgui;
 
+import dev.virulent.client.VirulentClient;
 import dev.virulent.client.module.Category;
+import dev.virulent.client.module.Module;
+import net.minecraft.client.Minecraft;
 
 import java.util.EnumMap;
 import java.util.Map;
@@ -34,12 +37,39 @@ public final class CategoryPanelState {
 			return;
 		}
 
-		// Meteor: staggered floating columns
-		int x = 40;
+		// Meteor: pack windows in a row with 4px gaps, wrapping when needed.
+		int x = 4;
 		int y = 40;
-		for (int i = 0; i < categories.length; i++) {
-			panels.put(categories[i], new Panel(x + (i % 3) * 120, y + (i / 3) * 28, false));
+		int rowH = 40;
+		int screenW = 854;
+		Minecraft client = Minecraft.getInstance();
+		if (client.getWindow() != null) {
+			screenW = client.getWindow().getGuiScaledWidth();
 		}
+		for (Category category : categories) {
+			int w = estimateMeteorWidth(category);
+			if (x + w > screenW - 4 && x > 4) {
+				x = 4;
+				y += rowH;
+			}
+			panels.put(category, new Panel(x, y, false));
+			x += w + 4;
+		}
+	}
+
+	private static int estimateMeteorWidth(Category category) {
+		Minecraft client = Minecraft.getInstance();
+		if (client.font == null) {
+			return Math.round(80 * 0.72f);
+		}
+		int width = Math.max(80, client.font.width(category.getDisplayName()) + 22);
+		if (VirulentClient.getInstance() == null || VirulentClient.getInstance().getModuleManager() == null) {
+			return Math.round(width * 0.72f);
+		}
+		for (Module module : VirulentClient.getInstance().getModuleManager().getModulesByCategory(category)) {
+			width = Math.max(width, client.font.width(module.getName()) + 12);
+		}
+		return Math.round(width * 0.72f);
 	}
 
 	public record Panel(int x, int y, boolean collapsed) {
