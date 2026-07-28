@@ -1,0 +1,48 @@
+{
+	"required": true,
+	"package": "dev.virulent.client.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"plugin": "dev.virulent.client.mixin.VirulentMixinPlugin",
+	"client": [
+		"KeyboardMixin",
+		"KeyboardInputMixin",
+		"ClientInputAccessor",
+		"LocalPlayerMixin",
+		"PlayerMixin",
+		"GameRendererMixin",
+		"GameRendererAccessor",
+		"InGameHudMixin",
+		"MinecraftAccessor",
+		"MinecraftMixin",
+		"EntityStepMixin",
+		"EntityMixin",
+		"EntityRendererMixin",
+		"EntityRenderDispatcherMixin",
+		"BlockStateMixin",
+		"ClientPacketListenerMixin",
+		"ConnectionMixin",
+		"DisconnectedScreenAccessor",
+		"ScreenMixin",
+		"CameraMixin",
+		"CameraAccessor",
+		"LevelMixin",
+		"LevelRendererMixin",
+		"ClientLevelMixin",
+		"ItemInHandRendererMixin",
+		"LivingEntityMixin",
+		"WeatherEffectRendererMixin",
+		"PrimaryLevelDataAccessor",
+		"LightmapMixin",
+		"LightmapRenderStateExtractorMixin",
+		"LightmapRenderStateExtractorAccessor",
+		"VisGraphMixin",
+		"SodiumLightDataAccessMixin",
+		"SodiumBlockRendererMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

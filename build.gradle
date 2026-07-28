@@ -1,0 +1,203 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+	id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+repositories {
+	mavenCentral()
+	maven {
+		name = "Modrinth"
+		url = "https://api.modrinth.com/maven"
+		content {
+			includeGroup "maven.modrinth"
+		}
+	}
+	maven {
+		name = "FallenBreath"
+		url = "https://maven.fallenbreath.me/releases"
+	}
+}
+
+loom {
+	splitEnvironmentSourceSets()
+
+	runs {
+		client {
+			client()
+			programArg "--msa"
+		}
+	}
+
+	mods {
+		"virulent" {
+			sourceSet sourceSets.main
+			sourceSet sourceSets.client
+		}
+	}
+}
+
+configurations {
+	fabricApiRelease
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	fabricApiRelease("net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}") {
+		transitive = false
+	}
+
+	// Dev-only runtime mods (optional; port may proceed without them).
+	runtimeOnly "com.ptsmods:devlogin:3.5"
+	compileOnly "maven.modrinth:sodium:${project.sodium_version}"
+	runtimeOnly "maven.modrinth:sodium:${project.sodium_version}"
+}
+
+processResources {
+	def version = project.version
+	inputs.property "version", version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": version
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+}
+
+java {
+	withSourcesJar()
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}
+
+jar {
+	from("LICENSE") {
+		rename { "${it}_${project.base.archivesName.get()}" }
+	}
+}
+
+tasks.register('copyReadme', Copy) {
+	from 'README.txt'
+	into layout.buildDirectory.dir('libs')
+}
+
+tasks.named('build') {
+	dependsOn copyReadme
+}
+
+tasks.register('packageWebsiteZip') {
+	group = 'distribution'
+	description = 'Builds a website download zip with Virulent, Fabric API, and README.'
+	dependsOn 'jar'
+
+	def stagingDir = layout.buildDirectory.dir('website-zip')
+	def downloadsDir = layout.projectDirectory.dir('website/downloads')
+	def zipName = "virulent-${project.mod_version}.zip"
+	def fabricApiJarName = "fabric-api-${project.fabric_api_version}.jar"
+	def clientJarName = "virulent-client-${project.mod_version}.jar"
+
+	inputs.files(configurations.fabricApiRelease)
+	inputs.files(provider { tasks.named('jar').get().outputs.files })
+	outputs.file(downloadsDir.file(zipName))
+	outputs.file(downloadsDir.file('virulent-latest.zip'))
+
+	doLast {
+		def stage = stagingDir.get().asFile
+		delete stage
+		stage.mkdirs()
+
+		copy {
+			from configurations.fabricApiRelease.singleFile
+			into stage
+			rename { fabricApiJarName }
+		}
+		copy {
+			from tasks.named('jar').get().outputs.files
+			into stage
+			rename { clientJarName }
+		}
+
+		def readme = new File(stage, 'README.txt')
+		readme.text = """Virulent Client — Install
+=========================
+
+Version: ${project.mod_version}
+Minecraft: ${project.minecraft_version}
+Java: 25+
+Fabric Loader: ${project.loader_version}+
+
+
+What's in this zip
+------------------
+- ${clientJarName}   (Virulent)
+- ${fabricApiJarName} (Fabric API for ${project.minecraft_version})
+- README.txt                  (this file)
+
+
+Install
+-------
+1) Install Java 25
+   https://adoptium.net/
+
+2) Install Fabric for Minecraft ${project.minecraft_version}
+   https://fabricmc.net/use/installer/
+   - Minecraft version: ${project.minecraft_version}
+   - Install, then select the Fabric ${project.minecraft_version} profile in the launcher
+
+3) Open your mods folder
+   Windows: Win+R → %appdata%\\.minecraft\\mods
+
+4) Copy BOTH jars from this zip into mods:
+   - ${fabricApiJarName}
+   - ${clientJarName}
+
+5) Launch the Fabric ${project.minecraft_version} profile (not vanilla).
+
+6) In game, press Right Shift to open the Click GUI.
+
+
+Checklist
+---------
+[ ] Java 25+
+[ ] Minecraft ${project.minecraft_version}
+[ ] Fabric Loader profile for ${project.minecraft_version}
+[ ] Both jars in .minecraft\\mods
+[ ] Launched Fabric profile
+[ ] Right Shift opens Click GUI
+
+
+Common issues
+-------------
+- Wrong Minecraft version → this build is for ${project.minecraft_version} only
+- Missing Fabric API → put ${fabricApiJarName} in mods
+- Wrong Java → use Java 25+
+- Launched vanilla → select the Fabric ${project.minecraft_version} profile
+"""
+
+		def outDir = downloadsDir.asFile
+		outDir.mkdirs()
+		def versionedZip = new File(outDir, zipName)
+		def latestZip = new File(outDir, 'virulent-latest.zip')
+		ant.zip(destfile: versionedZip) {
+			fileset(dir: stage)
+		}
+		ant.copy(file: versionedZip, tofile: latestZip, overwrite: true)
+		println "Packaged ${versionedZip} and ${latestZip}"
+	}
+}
+
+publishing {
+	publications {
+		create("mavenJava", MavenPublication) {
+			from components.java
+		}
+	}
+	repositories {
+	}
+}

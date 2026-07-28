@@ -1,0 +1,12 @@
+package dev.virulent.client.mixin;
+
+import net.minecraft.world.level.levelgen.WorldOptions;
+import net.minecraft.world.level.storage.PrimaryLevelData;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.gen.Accessor;
+
+@Mixin(PrimaryLevelData.class)
+public interface PrimaryLevelDataAccessor {
+	@Accessor("worldOptions")
+	WorldOptions virulent$getWorldOptions();
+}

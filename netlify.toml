@@ -1,0 +1,6 @@
+[build]
+  publish = "website"
+
+# No build command needed — the site is already static.
+# Rebuild the zip locally with: gradlew.bat packageWebsiteZip
+# then commit website/downloads/ before deploying.

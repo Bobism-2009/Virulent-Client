@@ -1,0 +1,33 @@
+{
+	"schemaVersion": 1,
+	"id": "virulent",
+	"version": "${version}",
+	"name": "Virulent Client",
+	"description": "A Minecraft utility client.",
+	"authors": [
+		"Zachary"
+	],
+	"license": "GPL-3.0-only",
+	"icon": "assets/virulent/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"dev.virulent.client.VirulentClient"
+		]
+	},
+	"suggests": {
+		"seedcrackerx": "*"
+	},
+	"mixins": [
+		{
+			"config": "virulent.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~26.1.2",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}
