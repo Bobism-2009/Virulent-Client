@@ -12,6 +12,7 @@
 package dev.virulent.client.module.modules.player;
 
 import dev.virulent.client.event.events.Render3DEvent;
+import dev.virulent.client.mixin.ClientInputAccessor;
 import dev.virulent.client.module.Category;
 import dev.virulent.client.module.Module;
 import dev.virulent.client.module.modules.player.treebot.Tree;
@@ -27,12 +28,15 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
@@ -50,13 +54,21 @@ import java.util.stream.Stream;
 public final class TreeBot extends Module {
 	private static final int BREAK_TIMEOUT_TICKS = 100;
 	private static final int STUCK_JUMP_TICKS = 12;
+	// After this many stuck ticks, jumping clearly isn't helping — stop mashing it.
+	private static final int STOP_JUMPING_TICKS = 40;
 	private static final int STUCK_REPATH_TICKS = 30;
 	private static final int SKIP_COOLDOWN_TICKS = 200;
 	private static final int IGNORE_BREAK_TICKS = 60;
+	// Total time we'll spend on a single tree (walking + chopping) before abandoning it
+	// when no logs are getting broken. Prevents stuck-in-canopy / stuck-on-hilltop loops.
+	private static final int TREE_STALL_ABANDON_TICKS = 100;
 
 	private final NumberSetting range = addSetting(new NumberSetting("Range", 4.5, 1.0, 6.0, 0.05));
 	private final NumberSetting maxLogs = addSetting(new NumberSetting("Max Logs", 48.0, 3.0, 128.0, 1.0));
 	private final NumberSetting searchRange = addSetting(new NumberSetting("Search Range", 32.0, 8.0, 64.0, 1.0));
+	private final dev.virulent.client.setting.BooleanSetting collectDrops =
+		addSetting(new dev.virulent.client.setting.BooleanSetting("Collect Drops", true));
+	private final NumberSetting collectRange = addSetting(new NumberSetting("Collect Range", 16.0, 4.0, 48.0, 1.0));
 
 	private final Map<BlockPos, Integer> skippedStumps = new HashMap<>();
 	private final Map<BlockPos, Integer> ignoredBlocks = new HashMap<>();
@@ -71,6 +83,10 @@ public final class TreeBot extends Module {
 	private BlockPos currentBlock;
 	private Vec3 lastMovementPos;
 	private int tickCounter;
+	private int lastLogCount = -1;
+	private int lastProgressTick;
+	private ItemEntity collectTarget;
+	private int collectStartTick;
 
 	private record BreakParams(BlockPos pos, Direction side, Vec3 hitVec, double distanceSq, boolean los) {
 	}
@@ -79,7 +95,8 @@ public final class TreeBot extends Module {
 		SEARCH,
 		GO_TO_TREE,
 		CHOP,
-		GO_TO_ANGLE
+		GO_TO_ANGLE,
+		COLLECT
 	}
 
 	public TreeBot() {
@@ -112,6 +129,10 @@ public final class TreeBot extends Module {
 		ignoredBlocks.clear();
 		phase = Phase.SEARCH;
 		tickCounter = 0;
+		lastLogCount = -1;
+		lastProgressTick = 0;
+		collectTarget = null;
+		collectStartTick = 0;
 	}
 
 	@Override
@@ -124,10 +145,53 @@ public final class TreeBot extends Module {
 		decaySkips();
 		ignoredBlocks.entrySet().removeIf(entry -> entry.getValue() <= tickCounter);
 
+		// Global stall watchdog: if we have a tree assigned but haven't broken a log
+		// in TREE_STALL_ABANDON_TICKS ticks, drop it regardless of phase.
+		if (tree != null) {
+			int currentLogCount = tree.getLogs().size();
+			if (lastLogCount == -1 || currentLogCount < lastLogCount) {
+				lastLogCount = currentLogCount;
+				lastProgressTick = tickCounter;
+			} else if (tickCounter - lastProgressTick >= TREE_STALL_ABANDON_TICKS) {
+				dev.virulent.client.VirulentClient.LOGGER.info(
+					"[TreeBot] abandoning stump {} — stalled in phase {} for {}t, {} logs left: {}",
+					tree.getStump(), phase, TREE_STALL_ABANDON_TICKS, currentLogCount, tree.getLogs()
+				);
+				skipStump(tree.getStump());
+				for (BlockPos log : tree.getLogs()) {
+					ignoreBlock(log);
+				}
+				releaseControls();
+				resetBreak();
+				tree = null;
+				walkGoal = null;
+				path.clear();
+				pathIndex = 0;
+				stuckTicks = 0;
+				lastMovementPos = null;
+				lastLogCount = -1;
+				phase = Phase.SEARCH;
+			}
+		} else {
+			lastLogCount = -1;
+		}
+
 		switch (phase) {
 			case SEARCH -> searchForTree();
 			case GO_TO_TREE, GO_TO_ANGLE -> followPath();
 			case CHOP -> chopTree();
+			case COLLECT -> collectDrops();
+		}
+
+		if (tickCounter % 20 == 0) {
+			BlockPos playerPos = mc().player.blockPosition();
+			int pathLen = path.size();
+			BlockPos target = walkGoal;
+			dev.virulent.client.VirulentClient.LOGGER.info(
+				"[TreeBot] phase={} player={} walkGoal={} pathIdx={}/{} stuck={} tree={}",
+				phase, playerPos, target, pathIndex, pathLen, stuckTicks,
+				tree == null ? "null" : tree.getStump() + " logs=" + tree.getLogs().size()
+			);
 		}
 	}
 
@@ -139,6 +203,18 @@ public final class TreeBot extends Module {
 		releaseMovement();
 		resetBreak();
 		LocalPlayer player = mc().player;
+
+		// Prefer sweeping nearby drops before hunting for another tree.
+		if (collectDrops.getValue()) {
+			ItemEntity drop = findNearbyDrop();
+			if (drop != null) {
+				collectTarget = drop;
+				collectStartTick = tickCounter;
+				phase = Phase.COLLECT;
+				return;
+			}
+		}
+
 		BlockPos origin = player.blockPosition();
 		int radius = searchRange.getValue().intValue();
 
@@ -148,6 +224,7 @@ public final class TreeBot extends Module {
 			ArrayList<BlockPos> logs = analyzeTree(stump);
 			if (!logs.isEmpty() && logs.size() <= maxLogs.getValue().intValue()) {
 				tree = new Tree(stump, logs);
+				lastLogCount = -1;
 				phase = Phase.CHOP;
 				return;
 			}
@@ -165,6 +242,7 @@ public final class TreeBot extends Module {
 		}
 
 		tree = new Tree(stump, logs);
+		lastLogCount = -1;
 		if (canReachAnyLog(logs)) {
 			phase = Phase.CHOP;
 			return;
@@ -234,6 +312,91 @@ public final class TreeBot extends Module {
 		}
 	}
 
+	private void collectDrops() {
+		resetBreak();
+		LocalPlayer player = mc().player;
+		if (collectTarget == null || !collectTarget.isAlive() || collectTarget.isRemoved()) {
+			collectTarget = findNearbyDrop();
+			if (collectTarget == null) {
+				releaseMovement();
+				phase = Phase.SEARCH;
+				return;
+			}
+			collectStartTick = tickCounter;
+		}
+
+		// Vanilla pickup radius is ~1 block from bounding box center.
+		double dx = collectTarget.getX() - player.getX();
+		double dz = collectTarget.getZ() - player.getZ();
+		double horizDistSq = dx * dx + dz * dz;
+		if (horizDistSq <= 0.5 * 0.5) {
+			// Reached this drop — grab the next one or bail out to SEARCH.
+			collectTarget = findNearbyDrop();
+			if (collectTarget == null) {
+				releaseMovement();
+				phase = Phase.SEARCH;
+				return;
+			}
+			collectStartTick = tickCounter;
+			return;
+		}
+
+		// Safety: don't loop forever on unreachable items (e.g. drops in a pit).
+		if (tickCounter - collectStartTick >= 100) {
+			ignoreDrop(collectTarget);
+			collectTarget = null;
+			releaseMovement();
+			phase = Phase.SEARCH;
+			return;
+		}
+
+		BlockPos step = BlockPos.containing(collectTarget.getX(), player.getY(), collectTarget.getZ());
+		walkToward(step);
+	}
+
+	private final Set<Integer> ignoredDrops = new HashSet<>();
+
+	private void ignoreDrop(ItemEntity entity) {
+		ignoredDrops.add(entity.getId());
+	}
+
+	private ItemEntity findNearbyDrop() {
+		if (!collectDrops.getValue()) {
+			return null;
+		}
+		LocalPlayer player = mc().player;
+		double radius = collectRange.getValue();
+		AABB box = player.getBoundingBox().inflate(radius, radius / 2.0, radius);
+		ItemEntity best = null;
+		double bestDistSq = Double.MAX_VALUE;
+		for (ItemEntity entity : mc().level.getEntitiesOfClass(ItemEntity.class, box, this::isTreeDrop)) {
+			if (ignoredDrops.contains(entity.getId())) {
+				continue;
+			}
+			double distSq = entity.distanceToSqr(player);
+			if (distSq < bestDistSq) {
+				bestDistSq = distSq;
+				best = entity;
+			}
+		}
+		return best;
+	}
+
+	private boolean isTreeDrop(ItemEntity entity) {
+		if (entity == null || !entity.isAlive() || entity.isRemoved()) {
+			return false;
+		}
+		ItemStack stack = entity.getItem();
+		if (stack.isEmpty()) {
+			return false;
+		}
+		return stack.is(ItemTags.LOGS)
+			|| stack.is(ItemTags.LEAVES)
+			|| stack.is(ItemTags.SAPLINGS)
+			|| stack.getItem() == net.minecraft.world.item.Items.STICK
+			|| stack.getItem() == net.minecraft.world.item.Items.APPLE;
+	}
+
 	private void chopTree() {
 		releaseMovement();
 		if (tree == null) {
@@ -246,6 +409,7 @@ public final class TreeBot extends Module {
 			tree = null;
 			resetBreak();
 			phase = Phase.SEARCH;
+			lastLogCount = -1;
 			return;
 		}
 
@@ -316,11 +480,14 @@ public final class TreeBot extends Module {
 
 	private void walkToward(BlockPos target) {
 		mc().options.keyAttack.setDown(false);
-		Vec3 goal = TreeUtil.horizontalCenter(target, mc().player.getY());
-		Vec3 playerPos = mc().player.position();
+		LocalPlayer player = mc().player;
+		Vec3 goal = TreeUtil.horizontalCenter(target, player.getY());
+		Vec3 playerPos = player.position();
 		Vec3 diff = goal.subtract(playerPos);
 		float yaw = (float) Math.toDegrees(Math.atan2(-diff.x, diff.z));
-		CombatUtil.applyRotations(mc().player, yaw, 0.0f);
+		CombatUtil.applyRotations(player, yaw, 0.0f);
+		player.yBodyRot = yaw;
+		player.yBodyRotO = yaw;
 
 		if (lastMovementPos == null) {
 			lastMovementPos = playerPos;
@@ -333,12 +500,21 @@ public final class TreeBot extends Module {
 			lastMovementPos = playerPos;
 		}
 
-		boolean needStepUp = target.getY() > mc().player.blockPosition().getY();
-		boolean shouldJump = (stuckTicks >= STUCK_JUMP_TICKS || needStepUp) && findNearbyLeaf(true) == null;
+		boolean needStepUp = target.getY() > player.blockPosition().getY();
+		// Pulse-jump on odd stuck-ticks and stop entirely once it's clearly not helping,
+		// so we don't hammer the corner forever waiting on the watchdog.
+		boolean stuckJumpWindow = stuckTicks >= STUCK_JUMP_TICKS
+			&& stuckTicks < STOP_JUMPING_TICKS
+			&& (stuckTicks % 4) < 2;
+		boolean shouldJump = (stuckJumpWindow || needStepUp) && findNearbyLeaf(true) == null;
 		mc().options.keyUp.setDown(true);
 		mc().options.keySprint.setDown(true);
 		mc().options.keyJump.setDown(shouldJump);
 		BotMovement.set(true, shouldJump, true);
+		// Also write directly to the player's input so movement isn't lost when
+		// KeyboardInput.tick rebuilds keyPresses from KeyMappings.
+		player.input.keyPresses = new Input(true, false, false, false, shouldJump, false, true);
+		((ClientInputAccessor) (Object) player.input).virulent$setMoveVector(new Vec2(0.0f, 1.0f));
 	}
 
 	private void releaseMovement() {
@@ -627,29 +803,43 @@ public final class TreeBot extends Module {
 		LocalPlayer player = mc().player;
 		BlockPos origin = player.blockPosition();
 		double rangeSq = range.getValue() * range.getValue();
+		// Which logs can we already hit from where we're standing? Angle positions must
+		// let us reach at least one *new* log, or there's no point moving.
+		Set<BlockPos> alreadyReachable = new HashSet<>();
+		Vec3 currentEyes = player.getEyePosition();
+		for (BlockPos log : tree.getLogs()) {
+			if (currentEyes.distanceToSqr(Vec3.atCenterOf(log)) <= rangeSq && hasLosFrom(currentEyes, log)) {
+				alreadyReachable.add(log);
+			}
+		}
+
 		BlockPos best = null;
+		int bestReachCount = 0;
 		double bestDist = Double.MAX_VALUE;
 
 		for (int dx = -8; dx <= 8; dx++) {
 			for (int dz = -8; dz <= 8; dz++) {
-				for (int dy = -1; dy <= 2; dy++) {
+				for (int dy = -1; dy <= 3; dy++) {
 					BlockPos stand = origin.offset(dx, dy, dz);
-					if (!PathFinder.isWalkable(mc().level, stand)) {
+					if (stand.equals(origin) || !PathFinder.isWalkable(mc().level, stand)) {
 						continue;
 					}
 					Vec3 eyes = Vec3.atBottomCenterOf(stand).add(0.0, player.getEyeHeight(player.getPose()), 0.0);
-					boolean ok = false;
+					int newReach = 0;
 					for (BlockPos log : tree.getLogs()) {
+						if (alreadyReachable.contains(log)) {
+							continue;
+						}
 						if (eyes.distanceToSqr(Vec3.atCenterOf(log)) <= rangeSq && hasLosFrom(eyes, log)) {
-							ok = true;
-							break;
+							newReach++;
 						}
 					}
-					if (!ok) {
+					if (newReach == 0) {
 						continue;
 					}
 					double dist = origin.distSqr(stand);
-					if (dist < bestDist) {
+					if (newReach > bestReachCount || (newReach == bestReachCount && dist < bestDist)) {
+						bestReachCount = newReach;
 						bestDist = dist;
 						best = stand;
 					}

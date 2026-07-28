@@ -9,4 +9,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface ClientInputAccessor {
 	@Accessor("moveVector")
 	void virulent$setMoveVector(Vec2 moveVector);
+
+	@Accessor("moveVector")
+	Vec2 virulent$getMoveVector();
 }

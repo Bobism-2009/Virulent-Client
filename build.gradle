@@ -95,7 +95,9 @@ tasks.register('packageWebsiteZip') {
 	group = 'distribution'
 	description = 'Builds a website download zip with Virulent, Fabric API, and README.'
 	dependsOn 'jar'
+	mustRunAfter 'copyReadme'
 
+	def jarFile = tasks.named('jar', Jar).flatMap { it.archiveFile }
 	def stagingDir = layout.buildDirectory.dir('website-zip')
 	def downloadsDir = layout.projectDirectory.dir('website/downloads')
 	def zipName = "virulent-${project.mod_version}.zip"
@@ -103,7 +105,7 @@ tasks.register('packageWebsiteZip') {
 	def clientJarName = "virulent-client-${project.mod_version}.jar"
 
 	inputs.files(configurations.fabricApiRelease)
-	inputs.files(provider { tasks.named('jar').get().outputs.files })
+	inputs.file(jarFile)
 	outputs.file(downloadsDir.file(zipName))
 	outputs.file(downloadsDir.file('virulent-latest.zip'))
 
@@ -118,7 +120,7 @@ tasks.register('packageWebsiteZip') {
 			rename { fabricApiJarName }
 		}
 		copy {
-			from tasks.named('jar').get().outputs.files
+			from jarFile
 			into stage
 			rename { clientJarName }
 		}

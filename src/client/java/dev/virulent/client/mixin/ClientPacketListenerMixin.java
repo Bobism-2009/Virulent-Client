@@ -1,12 +1,15 @@
 package dev.virulent.client.mixin;
 
+import dev.virulent.client.module.modules.combat.AutoTotem;
 import dev.virulent.client.module.modules.combat.Velocity;
 import dev.virulent.client.seed.SeedState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
 import net.minecraft.network.protocol.game.ClientboundLoginPacket;
 import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -52,5 +55,27 @@ public class ClientPacketListenerMixin {
 			current.z + (packetVel.z - current.z) * horizontal
 		);
 		ci.cancel();
+	}
+
+	/**
+	 * Entity event 35 = totem-of-undying use animation. Server broadcasts this the
+	 * instant a totem pops. Firing our swap here (rather than waiting for the next
+	 * client tick) lets the swap packet arrive at the server before its next damage
+	 * tick, so subsequent lethal hits in the chain also get caught by a fresh totem.
+	 */
+	@Inject(method = "handleEntityEvent", at = @At("TAIL"))
+	private void virulent$totemBypass(ClientboundEntityEventPacket packet, CallbackInfo ci) {
+		if (packet.getEventId() != 35) {
+			return;
+		}
+		Minecraft mc = Minecraft.getInstance();
+		if (mc.player == null || mc.level == null) {
+			return;
+		}
+		Entity target = packet.getEntity(mc.level);
+		if (target != mc.player) {
+			return;
+		}
+		AutoTotem.onTotemPopped();
 	}
 }

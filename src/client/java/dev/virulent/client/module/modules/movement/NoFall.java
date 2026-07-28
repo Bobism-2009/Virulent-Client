@@ -30,7 +30,6 @@ public final class NoFall extends Module {
 			return;
 		}
 
-		// Read real ground state before enabling the onGround redirect.
 		spoofGround = !player.onGround() || player.fallDistance > 0.0f;
 	}
 
