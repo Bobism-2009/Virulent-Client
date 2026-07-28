@@ -57,6 +57,10 @@ public final class ConfigManager {
 		saveDeadline = System.currentTimeMillis() + SAVE_DEBOUNCE_MS;
 	}
 
+	public boolean isLoading() {
+		return loading;
+	}
+
 	public void tick() {
 		if (saveDeadline > 0 && System.currentTimeMillis() >= saveDeadline) {
 			saveDeadline = 0;

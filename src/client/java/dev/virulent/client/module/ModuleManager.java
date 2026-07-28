@@ -9,6 +9,7 @@ import dev.virulent.client.module.modules.combat.MaceKill;
 import dev.virulent.client.module.modules.combat.TriggerBot;
 import dev.virulent.client.module.modules.combat.Velocity;
 import dev.virulent.client.module.modules.misc.AutoReconnect;
+import dev.virulent.client.module.modules.misc.ChatFeedback;
 import dev.virulent.client.module.modules.misc.Freecam;
 import dev.virulent.client.module.modules.misc.Friends;
 import dev.virulent.client.module.modules.misc.Panic;
@@ -62,6 +63,7 @@ import java.util.List;
 
 public final class ModuleManager {
 	private final List<Module> modules = new ArrayList<>();
+	private boolean suppressToggleFeedback;
 
 	public void init() {
 		register(
@@ -112,6 +114,7 @@ public final class ModuleManager {
 			new AutoReconnect(),
 			new SeedCracker(),
 			new Friends(),
+			new ChatFeedback(),
 			new FpsHud(),
 			new FpsBooster(),
 			new Panic()
@@ -140,19 +143,28 @@ public final class ModuleManager {
 	}
 
 	public void disableAll(Module except) {
-		for (Module module : modules) {
-			if (module == except) {
-				continue;
-			}
+		suppressToggleFeedback = true;
+		try {
+			for (Module module : modules) {
+				if (module == except) {
+					continue;
+				}
 
-			if (module instanceof Zoom zoom && zoom.isZooming()) {
-				zoom.stopZoom();
-			}
+				if (module instanceof Zoom zoom && zoom.isZooming()) {
+					zoom.stopZoom();
+				}
 
-			if (module.isEnabled()) {
-				module.setEnabled(false);
+				if (module.isEnabled()) {
+					module.setEnabled(false);
+				}
 			}
+		} finally {
+			suppressToggleFeedback = false;
 		}
+	}
+
+	public boolean isSuppressingToggleFeedback() {
+		return suppressToggleFeedback;
 	}
 
 	public void onTick() {

@@ -2,7 +2,7 @@ Virulent Client
 ===============
 
 Minecraft Fabric utility client
-Version: 1.10.6
+Version: 1.10.7
 Minecraft: 26.1.2
 Java: 25+
 Fabric Loader: 0.19.3+
@@ -27,8 +27,8 @@ Install
 4) Put these jars in mods:
    - fabric-api for 26.1.2
      https://modrinth.com/mod/fabric-api/versions
-   - virulent-client-1.10.6.jar
-     (from this project: build\libs\virulent-client-1.10.6.jar)
+   - virulent-client-1.10.7.jar
+     (from this project: build\libs\virulent-client-1.10.7.jar)
 
 5) Launch the Fabric 26.1.2 profile (not vanilla).
 
@@ -39,10 +39,10 @@ What to send someone else
 -------------------------
 Send ALL of these:
 
-1) virulent-client-1.10.6.jar
-   Path: build\libs\virulent-client-1.10.6.jar
+1) virulent-client-1.10.7.jar
+   Path: build\libs\virulent-client-1.10.7.jar
    Do NOT send:
-   - virulent-client-1.10.6-sources.jar
+   - virulent-client-1.10.7-sources.jar
    - anything from run\
    - project source folders
 
@@ -102,7 +102,7 @@ From the project folder:
   gradlew.bat clean build
 
 Output:
-  build\libs\virulent-client-1.10.6.jar
+  build\libs\virulent-client-1.10.7.jar
 
 
 Common issues
@@ -120,7 +120,7 @@ Common issues
    Launcher profile must be Fabric 26.1.2.
 
 5) Sent the sources jar
-   Use virulent-client-1.10.6.jar, not -sources.jar.
+   Use virulent-client-1.10.7.jar, not -sources.jar.
 
 6) Old jar
    Rebuild with: gradlew.bat clean build
@@ -133,6 +133,6 @@ Checklist
 [ ] Java 25+
 [ ] Fabric Loader profile for 26.1.2
 [ ] fabric-api ...26.1.2.jar in mods
-[ ] virulent-client-1.10.6.jar in mods
+[ ] virulent-client-1.10.7.jar in mods
 [ ] Launched Fabric profile
 [ ] Right Shift opens Click GUI

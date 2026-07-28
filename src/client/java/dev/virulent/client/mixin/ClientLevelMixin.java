@@ -64,4 +64,11 @@ public class ClientLevelMixin {
 			ci.cancel();
 		}
 	}
+
+	@Inject(method = "animateTick", at = @At("HEAD"), cancellable = true)
+	private void virulent$noAmbientParticles(int posX, int posY, int posZ, CallbackInfo ci) {
+		if (FpsBooster.hideAmbientParticles()) {
+			ci.cancel();
+		}
+	}
 }

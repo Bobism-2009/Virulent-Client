@@ -82,6 +82,7 @@ public abstract class Module {
 			onDisable();
 		}
 		VirulentClient.getInstance().getConfigManager().scheduleSave();
+		dev.virulent.client.module.modules.misc.ChatFeedback.onModuleToggled(this, enabled);
 	}
 
 	protected <T extends Setting<?>> T addSetting(T setting) {

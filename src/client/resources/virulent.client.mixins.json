@@ -17,6 +17,7 @@
 		"EntityStepMixin",
 		"EntityMixin",
 		"EntityRendererMixin",
+		"ItemStackMixin",
 		"EntityRenderDispatcherMixin",
 		"BlockStateMixin",
 		"ClientPacketListenerMixin",
