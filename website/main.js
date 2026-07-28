@@ -1,41 +1,26 @@
 (() => {
-  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (reduce) return;
+  const tabs = Array.from(document.querySelectorAll(".tab"));
+  const panels = Array.from(document.querySelectorAll(".panel"));
 
-  const orbs = document.querySelectorAll(".orb");
-  const spore = document.querySelector(".spore");
-
-  let mx = 0;
-  let my = 0;
-  let cx = 0;
-  let cy = 0;
-
-  window.addEventListener(
-    "pointermove",
-    (e) => {
-      const x = (e.clientX / window.innerWidth - 0.5) * 2;
-      const y = (e.clientY / window.innerHeight - 0.5) * 2;
-      mx = x;
-      my = y;
-    },
-    { passive: true }
-  );
-
-  const tick = () => {
-    cx += (mx - cx) * 0.06;
-    cy += (my - cy) * 0.06;
-
-    orbs.forEach((orb, i) => {
-      const strength = i === 0 ? 18 : -14;
-      orb.style.translate = `${cx * strength}px ${cy * strength}px`;
+  const show = (name) => {
+    tabs.forEach((tab) => {
+      const active = tab.dataset.panel === name;
+      tab.classList.toggle("is-active", active);
+      tab.setAttribute("aria-selected", active ? "true" : "false");
     });
-
-    if (spore) {
-      spore.style.transform = `translate(${cx * -12}px, ${cy * -8}px) scale(1.04)`;
-    }
-
-    requestAnimationFrame(tick);
+    panels.forEach((panel) => {
+      const active = panel.dataset.panel === name;
+      panel.classList.toggle("is-active", active);
+      panel.hidden = !active;
+    });
   };
 
-  requestAnimationFrame(tick);
+  tabs.forEach((tab) => {
+    tab.setAttribute("role", "tab");
+    tab.addEventListener("click", () => show(tab.dataset.panel));
+  });
+
+  document.querySelectorAll("[data-goto]").forEach((el) => {
+    el.addEventListener("click", () => show(el.dataset.goto));
+  });
 })();

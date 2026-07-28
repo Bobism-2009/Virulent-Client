@@ -7,121 +7,196 @@
   <meta name="description" content="Download Virulent Client for Minecraft 26.1.2. Includes Fabric API and install instructions." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Sora:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="noise" aria-hidden="true"></div>
-  <div class="orb orb-a" aria-hidden="true"></div>
-  <div class="orb orb-b" aria-hidden="true"></div>
+  <div class="gui" id="gui" role="application" aria-label="Virulent Client">
+    <div class="gui-top-accent" aria-hidden="true"></div>
 
-  <header class="top">
-    <a class="mark" href="#top">Virulent</a>
-    <nav>
-      <a href="#install">Install</a>
-      <a href="#requirements">Requirements</a>
-      <a class="nav-download" href="downloads/virulent-latest.zip" download="virulent-1.10.5.zip">Download</a>
-    </nav>
-  </header>
+    <header class="gui-header">
+      <span class="gui-title">Virulent Client</span>
+      <span class="gui-mc">Minecraft 26.1.2</span>
+      <span class="gui-ver">v1.10.5</span>
+    </header>
 
-  <main id="top">
-    <section class="hero">
-      <div class="hero-visual" aria-hidden="true">
-        <svg class="spore" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
-          <defs>
-            <radialGradient id="g1" cx="50%" cy="40%" r="55%">
-              <stop offset="0%" stop-color="#c6ff3d" stop-opacity="0.35" />
-              <stop offset="55%" stop-color="#3d7a2a" stop-opacity="0.12" />
-              <stop offset="100%" stop-color="#08100a" stop-opacity="0" />
-            </radialGradient>
-            <filter id="soft">
-              <feGaussianBlur stdDeviation="2" />
-            </filter>
-          </defs>
-          <rect width="1200" height="800" fill="url(#g1)" />
-          <g class="cells" filter="url(#soft)" fill="none" stroke="#b8f000" stroke-opacity="0.28">
-            <circle cx="920" cy="220" r="86" stroke-width="1.5" />
-            <circle cx="920" cy="220" r="48" stroke-width="1" />
-            <circle cx="980" cy="280" r="28" stroke-width="1" />
-            <circle cx="860" cy="160" r="18" stroke-width="1" />
-            <circle cx="240" cy="560" r="110" stroke-width="1.2" />
-            <circle cx="240" cy="560" r="62" stroke-width="1" />
-            <circle cx="180" cy="500" r="22" stroke-width="1" />
-            <circle cx="700" cy="620" r="44" stroke-width="1" />
-            <circle cx="760" cy="580" r="16" stroke-width="1" />
-          </g>
-        </svg>
-      </div>
+    <div class="gui-body">
+      <aside class="gui-sidebar" aria-label="Categories">
+        <button class="tab is-active" type="button" data-panel="home">
+          <span class="tab-strip" aria-hidden="true"></span>
+          Home
+        </button>
+        <button class="tab" type="button" data-panel="install">
+          <span class="tab-strip" aria-hidden="true"></span>
+          Install
+        </button>
+        <button class="tab" type="button" data-panel="specs">
+          <span class="tab-strip" aria-hidden="true"></span>
+          Specs
+        </button>
+        <button class="tab" type="button" data-panel="keys">
+          <span class="tab-strip" aria-hidden="true"></span>
+          Keys
+        </button>
+      </aside>
 
-      <div class="hero-copy">
-        <p class="eyebrow">Minecraft · Fabric · 26.1.2</p>
-        <h1 class="brand">Virulent</h1>
-        <p class="lede">A sharp Fabric utility client. One download. Client, Fabric API, and a clear README.</p>
-        <div class="cta-row">
-          <a class="btn-primary" href="downloads/virulent-latest.zip" download="virulent-1.10.5.zip">
-            Download v1.10.5
-            <span aria-hidden="true">↓</span>
+      <section class="gui-content">
+        <div class="panel is-active" id="panel-home" data-panel="home">
+          <p class="lead">Fabric utility client for Minecraft 26.1.2. Zip includes the mod jar, Fabric API, and a short README.</p>
+
+          <a class="cta" href="downloads/virulent-latest.zip" download="virulent-1.10.5.zip">
+            <span class="cta-strip" aria-hidden="true"></span>
+            <span class="cta-body">
+              <span class="cta-title">Download Virulent</span>
+              <span class="cta-sub">virulent-1.10.5.zip · ~2.8 MB · Fabric API included</span>
+            </span>
+            <span class="chip chip-on">GET</span>
           </a>
-          <p class="meta">ZIP · ~2.8 MB · includes Fabric API 0.155.2</p>
-        </div>
-      </div>
-    </section>
 
-    <section id="install" class="section install">
-      <div class="section-head">
-        <h2>Install</h2>
-        <p>Four steps from zip to Right Shift.</p>
-      </div>
-      <ol class="steps">
-        <li>
-          <strong>Java 25</strong>
-          <span>Install from Adoptium, then restart your launcher.</span>
-        </li>
-        <li>
-          <strong>Fabric for 26.1.2</strong>
-          <span>Use the official installer and pick Minecraft 26.1.2.</span>
-        </li>
-        <li>
-          <strong>Drop both jars</strong>
-          <span>Copy <code>virulent-client</code> and <code>fabric-api</code> into <code>.minecraft/mods</code>.</span>
-        </li>
-        <li>
-          <strong>Launch Fabric</strong>
-          <span>Select the Fabric 26.1.2 profile — press Right Shift in-game.</span>
-        </li>
-      </ol>
-    </section>
+          <div class="mod-list">
+            <div class="mod">
+              <span class="mod-name">Minecraft</span>
+              <span class="chip">26.1.2</span>
+            </div>
+            <div class="mod">
+              <span class="mod-name">Java</span>
+              <span class="chip">25+</span>
+            </div>
+            <div class="mod">
+              <span class="mod-name">Fabric Loader</span>
+              <span class="chip">0.19.3+</span>
+            </div>
+            <div class="mod is-on">
+              <span class="mod-strip" aria-hidden="true"></span>
+              <span class="mod-name">In-game menu</span>
+              <span class="chip chip-on">Right Shift</span>
+            </div>
+          </div>
 
-    <section id="requirements" class="section requirements">
-      <div class="section-head">
-        <h2>Requirements</h2>
-        <p>Matched to this release so nothing is guesswork.</p>
-      </div>
-      <dl class="spec">
-        <div>
-          <dt>Minecraft</dt>
-          <dd>26.1.2</dd>
+          <div class="quick-links">
+            <button class="quick" type="button" data-goto="install">How to install →</button>
+            <a class="quick" href="https://fabricmc.net/use/installer/" rel="noopener" target="_blank">Fabric installer ↗</a>
+          </div>
         </div>
-        <div>
-          <dt>Java</dt>
-          <dd>25+</dd>
-        </div>
-        <div>
-          <dt>Fabric Loader</dt>
-          <dd>0.19.3+</dd>
-        </div>
-        <div>
-          <dt>In the ZIP</dt>
-          <dd>Virulent · Fabric API · README</dd>
-        </div>
-      </dl>
-    </section>
-  </main>
 
-  <footer class="foot">
-    <span>Virulent Client v1.10.5</span>
-    <a href="https://fabricmc.net/use/installer/" rel="noopener" target="_blank">Fabric installer</a>
-  </footer>
+        <div class="panel" id="panel-install" data-panel="install" hidden>
+          <p class="lead">Four steps. Do them in order — then launch with the Fabric 26.1.2 profile.</p>
+
+          <ol class="steps">
+            <li class="step">
+              <div class="step-head">
+                <span class="step-num">1</span>
+                <span class="setting-name">Install Java 25</span>
+                <a class="setting-link" href="https://adoptium.net/" rel="noopener" target="_blank">Adoptium ↗</a>
+              </div>
+              <p class="setting-desc">Install JDK 25, then restart your Minecraft launcher.</p>
+            </li>
+            <li class="step">
+              <div class="step-head">
+                <span class="step-num">2</span>
+                <span class="setting-name">Install Fabric</span>
+                <a class="setting-link" href="https://fabricmc.net/use/installer/" rel="noopener" target="_blank">Installer ↗</a>
+              </div>
+              <p class="setting-desc">Run the official Fabric installer and pick Minecraft <strong>26.1.2</strong>.</p>
+            </li>
+            <li class="step">
+              <div class="step-head">
+                <span class="step-num">3</span>
+                <span class="setting-name">Drop the jars</span>
+                <a class="setting-link" href="downloads/virulent-latest.zip" download="virulent-1.10.5.zip">Download ZIP</a>
+              </div>
+              <p class="setting-desc">Unzip, then put <code>virulent-client</code> and <code>fabric-api</code> into your <code>.minecraft/mods</code> folder.</p>
+            </li>
+            <li class="step">
+              <div class="step-head">
+                <span class="step-num">4</span>
+                <span class="setting-name">Launch &amp; open GUI</span>
+                <span class="setting-value accent">Right Shift</span>
+              </div>
+              <p class="setting-desc">Select the Fabric 26.1.2 profile. In-game, press <strong>Right Shift</strong> to open Virulent.</p>
+            </li>
+          </ol>
+
+          <a class="cta" href="downloads/virulent-latest.zip" download="virulent-1.10.5.zip">
+            <span class="cta-strip" aria-hidden="true"></span>
+            <span class="cta-body">
+              <span class="cta-title">Download ZIP</span>
+              <span class="cta-sub">Ready when you hit step 3</span>
+            </span>
+            <span class="chip chip-on">GET</span>
+          </a>
+        </div>
+
+        <div class="panel" id="panel-specs" data-panel="specs" hidden>
+          <p class="lead">What this build targets and what’s inside the zip.</p>
+
+          <div class="mod-list">
+            <div class="mod">
+              <span class="mod-name">Minecraft</span>
+              <span class="setting-value accent">26.1.2</span>
+            </div>
+            <div class="mod">
+              <span class="mod-name">Java</span>
+              <span class="setting-value accent">25+</span>
+            </div>
+            <div class="mod">
+              <span class="mod-name">Fabric Loader</span>
+              <span class="setting-value accent">0.19.3+</span>
+            </div>
+            <div class="mod">
+              <span class="mod-name">Client version</span>
+              <span class="setting-value accent">1.10.5</span>
+            </div>
+            <div class="mod">
+              <span class="mod-name">Package size</span>
+              <span class="chip">ZIP · ~2.8 MB</span>
+            </div>
+            <div class="mod is-on">
+              <span class="mod-strip" aria-hidden="true"></span>
+              <span class="mod-name">Includes Fabric API</span>
+              <span class="toggle is-on" aria-hidden="true"><span class="knob"></span></span>
+            </div>
+            <div class="mod is-on">
+              <span class="mod-strip" aria-hidden="true"></span>
+              <span class="mod-name">Includes README</span>
+              <span class="toggle is-on" aria-hidden="true"><span class="knob"></span></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" id="panel-keys" data-panel="keys" hidden>
+          <p class="lead">Same controls as the in-game ClickGUI.</p>
+
+          <div class="mod-list">
+            <div class="mod is-on">
+              <span class="mod-strip" aria-hidden="true"></span>
+              <span class="mod-name">Open / close ClickGUI</span>
+              <span class="chip chip-on">Right Shift</span>
+            </div>
+            <div class="mod">
+              <span class="mod-name">Toggle a module</span>
+              <span class="chip">Left click</span>
+            </div>
+            <div class="mod">
+              <span class="mod-name">Open module settings</span>
+              <span class="chip">Right click</span>
+            </div>
+            <div class="mod">
+              <span class="mod-name">Bind a key</span>
+              <span class="chip">Middle click</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer class="gui-footer">
+      <span class="footer-hint">Press Right Shift in-game to open this UI</span>
+      <a class="footer-chip is-on" href="downloads/virulent-latest.zip" download="virulent-1.10.5.zip">Download</a>
+      <a class="footer-chip" href="https://fabricmc.net/use/installer/" rel="noopener" target="_blank">Fabric</a>
+      <a class="footer-chip" href="https://adoptium.net/" rel="noopener" target="_blank">Java 25</a>
+    </footer>
+  </div>
 
   <script src="main.js"></script>
 </body>
