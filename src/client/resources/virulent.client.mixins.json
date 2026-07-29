@@ -29,6 +29,7 @@
 		"LevelMixin",
 		"LevelRendererMixin",
 		"ClientLevelMixin",
+		"ClientLevelAccessor",
 		"ItemInHandRendererMixin",
 		"LivingEntityMixin",
 		"WeatherEffectRendererMixin",

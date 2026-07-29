@@ -31,18 +31,30 @@ public final class KillAura extends Module {
 	private final BooleanSetting raycast = addSetting(new BooleanSetting("Raycast", true));
 
 	private int attackCooldown;
+	private LivingEntity target;
 
 	public KillAura() {
 		super("KillAura", "Smart combat aura with rotations, raycast, and weapon cooldown.", Category.COMBAT, GLFW.GLFW_KEY_UNKNOWN);
 	}
 
+	public LivingEntity getTarget() {
+		return target;
+	}
+
+	@Override
+	protected void onDisable() {
+		target = null;
+		attackCooldown = 0;
+	}
+
 	@Override
 	public void onTick() {
 		if (mc().player == null || mc().level == null || mc().gameMode == null) {
+			target = null;
 			return;
 		}
 
-		LivingEntity target = findTarget();
+		target = findTarget();
 		if (target == null) {
 			return;
 		}

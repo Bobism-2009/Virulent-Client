@@ -1,5 +1,6 @@
 package dev.virulent.client.mixin;
 
+import dev.virulent.client.module.modules.combat.Criticals;
 import dev.virulent.client.module.modules.combat.MaceKill;
 import dev.virulent.client.module.modules.player.AntiHunger;
 import dev.virulent.client.util.ServerRotations;
@@ -24,6 +25,12 @@ public class ConnectionMixin {
 		if (ci.isCancelled()) {
 			return;
 		}
+
+		Criticals.onOutgoing(packet, ci);
+		if (ci.isCancelled()) {
+			return;
+		}
+
 		if (packet instanceof ServerboundAttackPacket attackPacket) {
 			MaceKill.onAttackPacket(attackPacket, ci);
 		}

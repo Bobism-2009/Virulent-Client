@@ -1,6 +1,7 @@
 package dev.virulent.client.mixin;
 
 import dev.virulent.client.module.modules.performance.FpsBooster;
+import dev.virulent.client.module.modules.render.BarrierEsp;
 import dev.virulent.client.module.modules.render.BlockEsp;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
@@ -48,6 +49,7 @@ public class ClientLevelMixin {
 			return;
 		}
 		BlockEsp.onBlockChanged(pos, virulent$previousState, state);
+		BarrierEsp.onBlockChanged(pos, virulent$previousState, state);
 		virulent$previousState = null;
 	}
 

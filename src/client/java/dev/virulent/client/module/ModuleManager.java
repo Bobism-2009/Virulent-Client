@@ -4,6 +4,8 @@ import dev.virulent.client.event.events.KeyEvent;
 import dev.virulent.client.gui.clickgui.ClickGuiScreen;
 import dev.virulent.client.module.modules.combat.AutoClicker;
 import dev.virulent.client.module.modules.combat.AutoTotem;
+import dev.virulent.client.module.modules.combat.Criticals;
+import dev.virulent.client.module.modules.combat.CrossbowMachineGun;
 import dev.virulent.client.module.modules.combat.KillAura;
 import dev.virulent.client.module.modules.combat.MaceKill;
 import dev.virulent.client.module.modules.combat.TriggerBot;
@@ -38,13 +40,16 @@ import dev.virulent.client.module.modules.player.NoInteract;
 import dev.virulent.client.module.modules.player.Scaffold;
 import dev.virulent.client.module.modules.player.TreeBot;
 import dev.virulent.client.module.modules.player.Tunneler;
+import dev.virulent.client.module.modules.player.XPThrow;
 import dev.virulent.client.module.modules.render.ArmorHud;
+import dev.virulent.client.module.modules.render.BarrierEsp;
 import dev.virulent.client.module.modules.render.BaseFinder;
 import dev.virulent.client.module.modules.render.BlockEsp;
 import dev.virulent.client.module.modules.render.ESP;
 import dev.virulent.client.module.modules.render.Fullbright;
 import dev.virulent.client.module.modules.render.HandView;
 import dev.virulent.client.module.modules.render.ItemEsp;
+import dev.virulent.client.module.modules.render.LogoutSpots;
 import dev.virulent.client.module.modules.render.Nametags;
 import dev.virulent.client.module.modules.render.NoFire;
 import dev.virulent.client.module.modules.render.NoHurtCam;
@@ -69,6 +74,8 @@ public final class ModuleManager {
 		register(
 			new KillAura(),
 			new MaceKill(),
+			new Criticals(),
+			new CrossbowMachineGun(),
 			new Velocity(),
 			new TriggerBot(),
 			new AutoClicker(),
@@ -91,7 +98,9 @@ public final class ModuleManager {
 			new Tracers(),
 			new BaseFinder(),
 			new BlockEsp(),
+			new BarrierEsp(),
 			new Waypoints(),
+			new LogoutSpots(),
 			new WallHack(),
 			new ArmorHud(),
 			new HandView(),
@@ -104,6 +113,7 @@ public final class ModuleManager {
 			new MultiTask(),
 			new AutoTool(),
 			new AntiHunger(),
+			new XPThrow(),
 			new Scaffold(),
 			new TreeBot(),
 			new Tunneler(),
@@ -190,7 +200,9 @@ public final class ModuleManager {
 		Module xray = getModule("Xray");
 		Module baseFinder = getModule("BaseFinder");
 		Module blockEsp = getModule("BlockESP");
+		Module barrierEsp = getModule("BarrierESP");
 		Module waypoints = getModule("Waypoints");
+		Module logoutSpots = getModule("LogoutSpots");
 		Module seedCracker = getModule("SeedCracker");
 		Module treeBot = getModule("TreeBot");
 		Module tunneler = getModule("Tunneler");
@@ -199,7 +211,9 @@ public final class ModuleManager {
 			|| (xray != null && xray.isEnabled())
 			|| (baseFinder != null && baseFinder.isEnabled())
 			|| (blockEsp != null && blockEsp.isEnabled())
+			|| (barrierEsp instanceof BarrierEsp barrierEspModule && barrierEspModule.needsWorldRender())
 			|| (waypoints != null && waypoints.isEnabled())
+			|| (logoutSpots instanceof LogoutSpots logoutSpotsModule && logoutSpotsModule.needsWorldRender())
 			|| (seedCracker != null && seedCracker.isEnabled())
 			|| (treeBot != null && treeBot.isEnabled())
 			|| (tunneler != null && tunneler.isEnabled());
