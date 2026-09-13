@@ -43,7 +43,10 @@ import java.util.Set;
  * every downward delta into fall distance while airborne, so each ascend +
  * descend round trip along the route banks its full vertical variation as fall
  * distance; cycles repeat until the smash threshold is reached, which makes
- * this work from any depth. While a route is in flight the client's own move
+ * this work from any depth. Pathfound staircases are smoothed into straight
+ * line-of-sight shortcuts (split at vertical extremes so no banked fall is
+ * lost), and routes abort early if the target leaves attack reach of the
+ * spoofed home position. While a route is in flight the client's own move
  * packets are held back so they cannot fight the spoofed positions.
  */
 public final class MaceKill extends Module {
@@ -79,6 +82,10 @@ public final class MaceKill extends Module {
 	private static final int TIMEOUT_TICKS = 600;
 	/** Abort if the real player wanders this far from the route home. */
 	private static final double MAX_HOME_DRIFT = 2.0;
+	/** Server-side entity interaction limit; attacks from farther are dropped. */
+	private static final double MAX_ATTACK_REACH = 6.0;
+	/** Farthest waypoint a smoothing shortcut may jump to in one step. */
+	private static final int SMOOTH_WINDOW = 32;
 	/**
 	 * Vanilla kicks after ~80 consecutive non-falling ticks ("Flying is not
 	 * enabled"); descending resets the counter, so only the ascend leg counts.
@@ -180,6 +187,10 @@ public final class MaceKill extends Module {
 				Entity entity = mc().level.getEntity(targetId);
 				if (!(entity instanceof LivingEntity target) || !target.isAlive()) {
 					abortRoute("target lost");
+				} else if (target.position().distanceTo(home) > MAX_ATTACK_REACH) {
+					// Server validates attack reach against our spoofed (home)
+					// position; keep flying only while the hit can still land.
+					abortRoute("target out of reach");
 				}
 			}
 		}
@@ -268,6 +279,11 @@ public final class MaceKill extends Module {
 		Entity entity = mc().level.getEntity(targetId);
 		if (!(entity instanceof LivingEntity target) || !target.isAlive()) {
 			abortReason = "target lost";
+			finishRoute(false);
+			return false;
+		}
+		if (target.position().distanceTo(home) > MAX_ATTACK_REACH) {
+			abortReason = "target out of reach";
 			finishRoute(false);
 			return false;
 		}
@@ -440,6 +456,9 @@ public final class MaceKill extends Module {
 		}
 
 		List<Vec3> path = findClimbRoute(home, neededFall);
+		if (path != null) {
+			path = smoothRoute(path);
+		}
 		double pathFall = 0;
 		if (path != null) {
 			for (int i = 1; i < path.size(); i++) {
@@ -558,6 +577,74 @@ public final class MaceKill extends Module {
 			return null;
 		}
 		return knots;
+	}
+
+	/**
+	 * Replaces block-by-block staircase runs with straight line-of-sight
+	 * shortcuts. The route is split at every vertical direction change so each
+	 * shortcut spans a y-monotonic run only - a straight segment then has
+	 * exactly the same vertical variation as the staircase it replaces, and no
+	 * banked fall distance is lost. Shorter routes mean faster cycles and one
+	 * move packet per tick on straight stretches instead of one per block.
+	 */
+	private List<Vec3> smoothRoute(List<Vec3> raw) {
+		if (raw.size() < 3) {
+			return raw;
+		}
+		List<Vec3> smoothed = new ArrayList<>(raw.size());
+		smoothed.add(raw.get(0));
+		int i = 0;
+		while (i < raw.size() - 1) {
+			// Extend the run while the y-direction does not flip.
+			int runEnd = i + 1;
+			int dir = (int) Math.signum(raw.get(runEnd).y - raw.get(i).y);
+			while (runEnd + 1 < raw.size()) {
+				int nextDir = (int) Math.signum(raw.get(runEnd + 1).y - raw.get(runEnd).y);
+				if (dir != 0 && nextDir != 0 && nextDir != dir) {
+					break;
+				}
+				if (dir == 0) {
+					dir = nextDir;
+				}
+				runEnd++;
+			}
+			// Greedy farthest-visible shortcuts within the run.
+			int from = i;
+			while (from < runEnd) {
+				int to = Math.min(runEnd, from + SMOOTH_WINDOW);
+				while (to > from + 1 && !clearPath(raw.get(from), raw.get(to))) {
+					to--;
+				}
+				smoothed.add(raw.get(to));
+				from = to;
+			}
+			i = runEnd;
+		}
+		return smoothed;
+	}
+
+	/**
+	 * True when a player-sized box can slide from {@code a} to {@code b} in a
+	 * straight line without clipping blocks or entering fluids, sampled every
+	 * quarter block.
+	 */
+	private boolean clearPath(Vec3 a, Vec3 b) {
+		double dist = a.distanceTo(b);
+		int samples = Math.max(1, (int) Math.ceil(dist / CLEARANCE_STEP));
+		Vec3 step = b.subtract(a);
+		for (int s = 1; s <= samples; s++) {
+			Vec3 p = a.add(step.scale((double) s / samples));
+			BlockPos feet = BlockPos.containing(p);
+			if (!mc().level.getFluidState(feet).isEmpty()
+				|| !mc().level.getFluidState(feet.above()).isEmpty()) {
+				return false;
+			}
+			AABB box = new AABB(p.x - 0.3, p.y, p.z - 0.3, p.x + 0.3, p.y + 1.8, p.z + 0.3);
+			if (mc().level.getBlockCollisions(mc().player, box).iterator().hasNext()) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**
