@@ -1,0 +1,52 @@
+name: Build website zip
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle.properties'
+      - 'gradle/**'
+      - 'README.txt'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-website-zip
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      # gradle.properties pins a Windows JDK path for local builds; drop it on CI.
+      - name: Use runner JDK
+        run: sed -i '/^org.gradle.java.home=/d' gradle.properties
+
+      - name: Build website zip
+        run: ./gradlew --no-daemon packageWebsiteZip
+
+      - name: Commit updated downloads
+        run: |
+          git config user.name "virulent-ci"
+          git config user.email "ci@users.noreply.github.com"
+          git checkout -- gradle.properties
+          git add website/downloads
+          if git diff --cached --quiet; then
+            echo "Downloads unchanged; nothing to commit."
+          else
+            git commit -m "CI: rebuild website download zip"
+            git pull --rebase origin main
+            git push origin main
+          fi
