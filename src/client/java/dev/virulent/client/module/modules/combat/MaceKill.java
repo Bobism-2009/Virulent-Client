@@ -35,19 +35,22 @@ import java.util.Set;
  * Spoofs a tall fall before mace attacks so smash damage applies.
  * Inspired by TrouserStreak / Meteor MaceKill settings.
  *
- * Underground Mode: instead of clipping through the ceiling, a climb route is
- * pathfound through connected air spaces (caves, shafts, tunnels) around the
- * player. The route is then flown server-side with staged move packets capped
- * at TP Speed (max 200 blocks/second, i.e. 10 blocks per tick), each waypoint
- * collision-free, so strict movement checks accept every step. The server sums
- * every downward delta into fall distance while airborne, so each ascend +
- * descend round trip along the route banks its full vertical variation as fall
- * distance; cycles repeat until the smash threshold is reached, which makes
- * this work from any depth. Pathfound staircases are smoothed into straight
+ * Underground Mode: fall distance is banked with an in-place vertical column
+ * flown server-side with staged move packets capped at TP Speed (max 200
+ * blocks/second, i.e. 10 blocks per tick), each waypoint collision-free, so
+ * strict movement checks accept every step. The server sums every downward
+ * delta into fall distance while airborne, so each ascend + descend round trip
+ * banks the column height; cycles repeat until the target fall is reached. A
+ * column banks fall at the maximum possible rate (half of TP Speed) no matter
+ * how short it is - extra cycles cost nothing - so ANY measurable headroom
+ * works: open sky, a roofed base, or the ~0.2 blocks of air above the head in
+ * a 2-block mining tunnel all use the column directly with zero pathfinding.
+ * Only when headroom is essentially zero (under a slab or trapdoor) is a climb
+ * route pathfound through connected air spaces as a last resort, smoothed into
  * line-of-sight shortcuts (split at vertical extremes so no banked fall is
- * lost), and routes abort early if the target leaves attack reach of the
- * spoofed home position. While a route is in flight the client's own move
- * packets are held back so they cannot fight the spoofed positions.
+ * lost). Routes abort early if the target leaves attack reach of the spoofed
+ * home position. While a route is in flight the client's own move packets are
+ * held back so they cannot fight the spoofed positions.
  */
 public final class MaceKill extends Module {
 	private static MaceKill instance;
@@ -74,6 +77,12 @@ public final class MaceKill extends Module {
 	private static final double MIN_HOP = 0.1;
 	/** Headroom scan resolution in blocks. */
 	private static final double CLEARANCE_STEP = 0.25;
+	/** Fine headroom scan resolution; catches sub-block gaps under ceilings. */
+	private static final double FINE_CLEARANCE_STEP = 0.05;
+	/** Safety gap kept below the ceiling so the head never exactly touches. */
+	private static final double CLEARANCE_MARGIN = 0.02;
+	/** Move packets per tick ceiling so short columns stay server-friendly. */
+	private static final int MAX_MOVES_PER_TICK = 40;
 	/** Pathfinder node budget per route computation. */
 	private static final int MAX_SEARCH_NODES = 4096;
 	/** Longest route (in waypoints) worth flying per cycle. */
@@ -103,6 +112,8 @@ public final class MaceKill extends Module {
 	private Vec3 routePos = Vec3.ZERO;
 	private int nextIndex;
 	private int targetId;
+	private double fallPerCycle;
+	private boolean columnMode;
 	private double accumulatedFall;
 	private double lastAttackFall;
 	private int cyclesDone;
@@ -196,7 +207,8 @@ public final class MaceKill extends Module {
 		}
 
 		double budget = tpSpeed.getValue() / 20.0;
-		while (budget > 1.0E-4 && phase != Phase.IDLE) {
+		int movesSent = 0;
+		while (budget > 1.0E-4 && movesSent < MAX_MOVES_PER_TICK && phase != Phase.IDLE) {
 			Vec3 next = route.get(nextIndex);
 			double dist = routePos.distanceTo(next);
 			if (dist > budget) {
@@ -210,6 +222,7 @@ public final class MaceKill extends Module {
 			budget -= dist;
 			trackFall(next);
 			sendMove(next);
+			movesSent++;
 			routePos = next;
 
 			if (phase == Phase.ASCEND) {
@@ -245,7 +258,7 @@ public final class MaceKill extends Module {
 		}
 
 		double target = currentTargetFall();
-		if (accumulatedFall < target && cyclesDone < maxHops.getValue().intValue()) {
+		if (accumulatedFall < target && cyclesDone < cycleCap(target)) {
 			phase = Phase.ASCEND;
 			nextIndex = 1;
 			return;
@@ -273,6 +286,18 @@ public final class MaceKill extends Module {
 
 	private double currentTargetFall() {
 		return fallHeight.getValue() + attackIndex * heightIncrease.getValue().intValue();
+	}
+
+	/**
+	 * Column routes bank a fixed amount per cycle at no extra cost, so they run
+	 * exactly as many cycles as the target fall needs (Max Hops does not apply);
+	 * pathfound routes keep the user-set Max Hops budget.
+	 */
+	private int cycleCap(double targetFall) {
+		if (columnMode) {
+			return (int) Math.ceil(targetFall / Math.max(fallPerCycle, 1.0E-4)) + 2;
+		}
+		return maxHops.getValue().intValue();
 	}
 
 	private boolean performAttack() {
@@ -354,6 +379,8 @@ public final class MaceKill extends Module {
 		phase = Phase.IDLE;
 		route.clear();
 		nextIndex = 0;
+		fallPerCycle = 0;
+		columnMode = false;
 		accumulatedFall = 0;
 		cyclesDone = 0;
 		totalCycles = 0;
@@ -397,15 +424,18 @@ public final class MaceKill extends Module {
 			return;
 		}
 
-		double fallPerCycle = 0;
+		double newFallPerCycle = 0;
 		for (int i = 1; i < newRoute.size(); i++) {
-			fallPerCycle += Math.abs(newRoute.get(i).y - newRoute.get(i - 1).y);
+			newFallPerCycle += Math.abs(newRoute.get(i).y - newRoute.get(i - 1).y);
 		}
-		if (fallPerCycle < MIN_HOP) {
+		boolean column = newRoute.size() == 2
+			&& newRoute.get(0).x == newRoute.get(1).x
+			&& newRoute.get(0).z == newRoute.get(1).z;
+		if (newFallPerCycle < MIN_HOP) {
 			feedback("No climb route found - fully sealed in with zero headroom.");
 			return;
 		}
-		if (fallPerCycle * maxHops.getValue().intValue() < SMASH_THRESHOLD) {
+		if (!column && newFallPerCycle * maxHops.getValue().intValue() < SMASH_THRESHOLD) {
 			feedback("Route too shallow to reach smash threshold (raise Max Hops).");
 			return;
 		}
@@ -418,6 +448,8 @@ public final class MaceKill extends Module {
 		routePos = start;
 		nextIndex = 1;
 		targetId = target.getId();
+		fallPerCycle = newFallPerCycle;
+		columnMode = column;
 		accumulatedFall = 0;
 		lastAttackFall = 0;
 		cyclesDone = 0;
@@ -435,7 +467,9 @@ public final class MaceKill extends Module {
 			for (int i = 1; i < route.size(); i++) {
 				routeLength += route.get(i).distanceTo(route.get(i - 1));
 			}
-			double estSeconds = 2.0 * routeLength * estCycles / tpSpeed.getValue();
+			double estSeconds = Math.max(
+				2.0 * routeLength * estCycles / tpSpeed.getValue(),
+				2.0 * (route.size() - 1) * estCycles / (MAX_MOVES_PER_TICK * 20.0));
 			feedback("Route: " + String.format("%.1f", fallPerCycle) + "b fall/cycle, ~" + estCycles
 				+ " cycle" + (estCycles == 1 ? "" : "s") + " @ <=" + tpSpeed.getValue().intValue()
 				+ " b/s (~" + String.format("%.1f", estSeconds) + "s)");
@@ -444,35 +478,29 @@ public final class MaceKill extends Module {
 
 	/**
 	 * Builds the per-cycle flight route starting and ending at {@code home}.
-	 * Open sky (or Underground Mode off) uses a straight vertical column; when
-	 * confined, a climb route is pathfound through nearby connected air spaces.
-	 * Falls back to an in-place column inside the available headroom when the
-	 * player is completely sealed in, so any depth still works via cycles.
+	 * A vertical in-place column banks fall distance at the maximum possible
+	 * rate (half of TP Speed) no matter how short it is - a pathfound route can
+	 * never beat it, since fall banked per cycle cannot exceed route length. So
+	 * any measurable headroom uses the column directly with zero pathfinding:
+	 * open sky, a roofed base, or the sub-block gap in a 2-tall tunnel. The
+	 * climb-route pathfinder only remains as a last resort for spots with
+	 * essentially zero headroom (under a slab or trapdoor) that still connect
+	 * to nearby air.
 	 */
 	private List<Vec3> buildRoute(Vec3 home, double neededFall) {
-		double clearance = clearanceAbove(neededFall);
-		if (clearance >= neededFall || !undergroundMode.getValue()) {
+		if (!undergroundMode.getValue()) {
 			return columnRoute(home, neededFall);
 		}
-
+		double clearance = clearanceAbove(neededFall);
+		if (clearance >= neededFall) {
+			return columnRoute(home, neededFall);
+		}
+		double usable = clearance - CLEARANCE_MARGIN;
+		if (usable >= MIN_HOP) {
+			return columnRoute(home, usable);
+		}
 		List<Vec3> path = findClimbRoute(home, neededFall);
-		if (path != null) {
-			path = smoothRoute(path);
-		}
-		double pathFall = 0;
-		if (path != null) {
-			for (int i = 1; i < path.size(); i++) {
-				pathFall += Math.abs(path.get(i).y - path.get(i - 1).y);
-			}
-		}
-		// Prefer the pathfound route only when it beats plain in-place hops.
-		if (path != null && pathFall > clearance + 0.5) {
-			return path;
-		}
-		if (clearance >= MIN_HOP) {
-			return columnRoute(home, clearance);
-		}
-		return path;
+		return path == null ? null : smoothRoute(path);
 	}
 
 	private List<Vec3> columnRoute(Vec3 home, double height) {
@@ -777,14 +805,20 @@ public final class MaceKill extends Module {
 		}
 		AABB base = mc().player.getBoundingBox();
 		double clear = 0;
-		while (clear + CLEARANCE_STEP <= maxCheck) {
-			AABB test = base.move(0, clear + CLEARANCE_STEP, 0);
-			if (mc().level.getBlockCollisions(mc().player, test).iterator().hasNext()) {
-				break;
-			}
+		while (clear + CLEARANCE_STEP <= maxCheck && clearAt(base, clear + CLEARANCE_STEP)) {
 			clear += CLEARANCE_STEP;
 		}
+		// Refine the blocked quarter block at fine resolution so sub-block
+		// headroom still registers - a 2-block tunnel leaves ~0.2 above the
+		// head, which the coarse scan alone rounds down to zero.
+		while (clear + FINE_CLEARANCE_STEP <= maxCheck && clearAt(base, clear + FINE_CLEARANCE_STEP)) {
+			clear += FINE_CLEARANCE_STEP;
+		}
 		return clear;
+	}
+
+	private boolean clearAt(AABB base, double up) {
+		return !mc().level.getBlockCollisions(mc().player, base.move(0, up, 0)).iterator().hasNext();
 	}
 
 	private void feedback(String text) {
