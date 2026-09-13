@@ -20,14 +20,12 @@ public abstract class Module {
 
 	private boolean enabled;
 	private int keyBind;
-	private final int defaultKeyBind;
 
 	protected Module(String name, String description, Category category, int keyBind) {
 		this.name = name;
 		this.description = description;
 		this.category = category;
 		this.keyBind = keyBind;
-		this.defaultKeyBind = keyBind;
 	}
 
 	public String getName() {
@@ -60,10 +58,14 @@ public abstract class Module {
 	}
 
 	public void resetToDefaults() {
-		setKeyBind(defaultKeyBind);
+		// Snapshot everything first so a mis-click is recoverable from the Profiles screen.
+		boolean backedUp = VirulentClient.getInstance().getConfigManager()
+			.backupProfile(dev.virulent.client.config.ConfigManager.BEFORE_RESET_PROFILE);
 		for (Setting<?> setting : settings) {
 			setting.reset();
 		}
+		// The keybind is deliberately kept; resetting settings should not silently unbind the module.
+		dev.virulent.client.module.modules.misc.ChatFeedback.announceReset(this, backedUp);
 	}
 
 	public void toggle() {

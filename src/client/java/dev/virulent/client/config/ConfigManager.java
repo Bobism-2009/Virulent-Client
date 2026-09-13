@@ -42,6 +42,7 @@ public final class ConfigManager {
 	private static final Pattern SAFE_NAME = Pattern.compile("[A-Za-z0-9 _.-]{1,32}");
 	public static final String DEFAULT_PROFILE = "default";
 	public static final String SINGLEPLAYER_KEY = "singleplayer";
+	public static final String BEFORE_RESET_PROFILE = "before-reset";
 
 	private long saveDeadline;
 	private boolean loading;
@@ -234,6 +235,22 @@ public final class ConfigManager {
 		saveMeta();
 		save();
 		return true;
+	}
+
+	/** Snapshots the current module state to {@code profiles/<name>.json} without switching the active profile. */
+	public boolean backupProfile(String name) {
+		String sanitized = sanitizeName(name);
+		if (sanitized == null) {
+			return false;
+		}
+		try {
+			ensureDirs();
+			Files.writeString(getProfilePath(sanitized), GSON.toJson(serializeModules()));
+			return true;
+		} catch (IOException exception) {
+			VirulentClient.LOGGER.error("Failed to back up profile {}", sanitized, exception);
+			return false;
+		}
 	}
 
 	/** Loads {@code name}, makes it active, and applies module settings. */

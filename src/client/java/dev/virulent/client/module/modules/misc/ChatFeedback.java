@@ -52,4 +52,24 @@ public final class ChatFeedback extends Module {
 
 		mc().player.sendSystemMessage(message);
 	}
+
+	/** Reset notices always show (even with ChatFeedback off) — they explain how to undo the reset. */
+	public static void announceReset(Module module, boolean backedUp) {
+		if (mc().player == null) {
+			return;
+		}
+		MutableComponent message = Component.empty();
+		if (instance == null || instance.prefix.getValue()) {
+			message.append(Component.literal("[").withStyle(ChatFormatting.GRAY));
+			message.append(Component.literal("Virulent").withStyle(ChatFormatting.LIGHT_PURPLE));
+			message.append(Component.literal("] ").withStyle(ChatFormatting.GRAY));
+		}
+		message.append(Component.literal(module.getName()).withStyle(ChatFormatting.WHITE));
+		message.append(Component.literal(" settings reset to defaults.").withStyle(ChatFormatting.YELLOW));
+		if (backedUp) {
+			message.append(Component.literal(" Old settings saved: Profiles > 'before-reset'.")
+				.withStyle(ChatFormatting.GRAY));
+		}
+		mc().player.sendSystemMessage(message);
+	}
 }
