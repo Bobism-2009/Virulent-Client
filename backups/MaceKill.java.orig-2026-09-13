@@ -29,13 +29,6 @@ import java.util.Map;
 /**
  * Spoofs a tall fall before mace attacks so smash damage applies.
  * Inspired by TrouserStreak / Meteor MaceKill settings.
- *
- * Underground Mode: when the ceiling is lower than Fall Height, the fall is
- * accumulated over repeated small hops instead of one tall peak. The server
- * only sums downward deltas into fall distance (upward moves never reset it
- * while airborne), so many short up/down pairs inside the available headroom
- * reach the same fall distance as one open-sky peak without ever moving the
- * player into a block.
  */
 public final class MaceKill extends Module {
 	private static MaceKill instance;
@@ -50,16 +43,7 @@ public final class MaceKill extends Module {
 	private final BooleanSetting bypassTotems = addSetting(new BooleanSetting("Bypass Totems", false));
 	private final NumberSetting attacks = addSetting(new NumberSetting("Attacks", 3.0, 1.0, 3.0, 1.0));
 	private final NumberSetting heightIncrease = addSetting(new NumberSetting("Height Increase", 20.0, 1.0, 100.0, 1.0));
-	private final BooleanSetting undergroundMode = addSetting(new BooleanSetting("Underground Mode", true));
-	private final NumberSetting maxHops = addSetting(new NumberSetting("Max Hops", 20.0, 1.0, 50.0, 1.0));
 	private final BooleanSetting chatFeedback = addSetting(new BooleanSetting("Chat Feedback", true));
-
-	/** Smash attacks require fall distance > 1.5; keep a small margin. */
-	private static final double SMASH_THRESHOLD = 1.6;
-	/** Smallest hop worth sending; below this the headroom is unusable. */
-	private static final double MIN_HOP = 0.1;
-	/** Headroom scan resolution in blocks. */
-	private static final double CLEARANCE_STEP = 0.25;
 
 	private boolean sendingAttacks;
 	private final BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
@@ -73,7 +57,7 @@ public final class MaceKill extends Module {
 	public MaceKill() {
 		super(
 			"MaceKill",
-			"Makes the Mace powerful when swung, even under low ceilings. Can also bypass totem usage.",
+			"Makes the Mace powerful when swung. Can also bypass totem usage.",
 			Category.COMBAT,
 			GLFW.GLFW_KEY_UNKNOWN
 		);
@@ -110,25 +94,16 @@ public final class MaceKill extends Module {
 			return;
 		}
 
-		double desiredFall = fallHeight.getValue();
-		double headroom = clearanceAbove(desiredFall);
-		boolean confined = headroom < desiredFall;
-
-		if (confined && undergroundMode.getValue()) {
-			if (headroom < MIN_HOP) {
-				feedback("No headroom at all - cannot spoof a fall here.");
-				return;
-			}
-			double achievable = Math.min(desiredFall, headroom * maxHops.getValue().intValue());
-			if (achievable < SMASH_THRESHOLD) {
-				feedback("Ceiling too low to reach smash threshold (raise Max Hops).");
-				return;
-			}
+		int baseBlocks = maxHeightAbovePlayer();
+		if (baseBlocks <= 0) {
+			feedback("No valid space above you to attack from.");
+			return;
 		}
 
 		ci.cancel();
 
 		Vec3 previousPos = mc().player.position();
+		int currentHeight = baseBlocks;
 		int attackCount = bypassTotems.getValue() ? attacks.getValue().intValue() : 1;
 
 		for (int i = 0; i < spamPackets.getValue().intValue(); i++) {
@@ -140,11 +115,12 @@ public final class MaceKill extends Module {
 			));
 		}
 
-		double lastFall = 0;
 		try {
 			for (int i = 0; i < attackCount; i++) {
-				double targetFall = desiredFall + i * heightIncrease.getValue().intValue();
-				lastFall = spoofFall(targetFall, headroom, previousPos);
+				int blocks = i == 0 ? baseBlocks : currentHeight;
+				Vec3 peak = new Vec3(mc().player.getX(), mc().player.getY() + blocks, mc().player.getZ());
+				sendMove(peak);
+				sendMove(previousPos);
 				mc().player.setPos(previousPos);
 
 				sendingAttacks = true;
@@ -153,6 +129,7 @@ public final class MaceKill extends Module {
 					mc().player.swing(InteractionHand.MAIN_HAND);
 				}
 				mc().player.connection.send(new ServerboundAttackPacket(target.getId()));
+				currentHeight += heightIncrease.getValue().intValue();
 			}
 
 			positionCache.clear();
@@ -164,8 +141,7 @@ public final class MaceKill extends Module {
 			}
 
 			if (chatFeedback.getValue()) {
-				String mode = confined && undergroundMode.getValue() ? " (underground)" : "";
-				feedback("MaceKill x" + attackCount + " @ " + String.format("%.1f", lastFall) + " fall" + mode);
+				feedback("MaceKill x" + attackCount + " @ " + baseBlocks + " fall");
 			}
 		} finally {
 			sendingAttacks = false;
@@ -261,57 +237,8 @@ public final class MaceKill extends Module {
 		return collides;
 	}
 
-	/**
-	 * Spoofs {@code targetFall} blocks of fall distance ending at {@code home}.
-	 * In open space this is one peak + return, exactly like the legacy path.
-	 * When headroom is short (and Underground Mode is on), the fall is split
-	 * into up/down hops that each stay inside the free space above the player,
-	 * since the server sums every downward delta into fall distance.
-	 * Returns the fall distance actually accumulated.
-	 */
-	private double spoofFall(double targetFall, double headroom, Vec3 home) {
-		boolean confined = headroom < targetFall;
-		if (!confined || !undergroundMode.getValue()) {
-			Vec3 peak = home.add(0, targetFall, 0);
-			sendMove(peak);
-			sendMove(home);
-			return targetFall;
-		}
-
-		double accumulated = 0;
-		int hops = 0;
-		int hopLimit = maxHops.getValue().intValue();
-		while (accumulated < targetFall && hops < hopLimit) {
-			double hop = Math.min(headroom, targetFall - accumulated);
-			if (hop < MIN_HOP) {
-				break;
-			}
-			sendMove(home.add(0, hop, 0));
-			sendMove(home);
-			accumulated += hop;
-			hops++;
-		}
-		return accumulated;
-	}
-
-	/**
-	 * Largest collision-free vertical offset (in blocks, up to {@code maxCheck})
-	 * the player's bounding box can be moved upward without clipping a block.
-	 */
-	private double clearanceAbove(double maxCheck) {
-		if (mc().level == null || mc().player == null) {
-			return 0;
-		}
-		AABB base = mc().player.getBoundingBox();
-		double clear = 0;
-		while (clear + CLEARANCE_STEP <= maxCheck) {
-			AABB test = base.move(0, clear + CLEARANCE_STEP, 0);
-			if (mc().level.getBlockCollisions(mc().player, test).iterator().hasNext()) {
-				break;
-			}
-			clear += CLEARANCE_STEP;
-		}
-		return clear;
+	private int maxHeightAbovePlayer() {
+		return fallHeight.getValue().intValue();
 	}
 
 	private void feedback(String text) {
