@@ -37,8 +37,9 @@ import java.util.Set;
  *
  * Underground Mode: fall distance is banked with an in-place vertical column
  * flown server-side with staged move packets capped at TP Speed (max 200
- * blocks/second, i.e. 10 blocks per tick), each waypoint collision-free, so
- * strict movement checks accept every step. The server sums every downward
+ * blocks/second, i.e. 10 blocks per tick) AND at a per-tick packet budget
+ * that stays under server packet-rate limiters, each waypoint collision-free,
+ * so strict movement checks accept every step. The server sums every downward
  * delta into fall distance while airborne, so each ascend + descend round trip
  * banks the column height; cycles repeat until the target fall is reached. A
  * column banks fall at the maximum possible rate (half of TP Speed) no matter
@@ -81,8 +82,14 @@ public final class MaceKill extends Module {
 	private static final double FINE_CLEARANCE_STEP = 0.05;
 	/** Safety gap kept below the ceiling so the head never exactly touches. */
 	private static final double CLEARANCE_MARGIN = 0.02;
-	/** Move packets per tick ceiling so short columns stay server-friendly. */
-	private static final int MAX_MOVES_PER_TICK = 40;
+	/**
+	 * Move packets per tick ceiling. Paper's default packet limiter kicks any
+	 * client averaging over 500 packets/second ("sent too many packets!"), and
+	 * sub-block columns hit this ceiling every tick, so it has to leave room
+	 * for the client's normal traffic: 8 moves/tick = 160/s, under a third of
+	 * the default limit.
+	 */
+	private static final int MAX_MOVES_PER_TICK = 8;
 	/** Pathfinder node budget per route computation. */
 	private static final int MAX_SEARCH_NODES = 4096;
 	/** Longest route (in waypoints) worth flying per cycle. */
