@@ -7,6 +7,7 @@ import dev.virulent.client.util.ServerRotations;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
+import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -21,6 +22,14 @@ public class ConnectionMixin {
 	)
 	private void virulent$onSend(Packet<?> packet, CallbackInfo ci) {
 		ServerRotations.onOutgoing(packet);
+
+		if (packet instanceof ServerboundMovePlayerPacket movePacket) {
+			MaceKill.onMovePacket(movePacket, ci);
+			if (ci.isCancelled()) {
+				return;
+			}
+		}
+
 		AntiHunger.onOutgoing(packet, ci);
 		if (ci.isCancelled()) {
 			return;
