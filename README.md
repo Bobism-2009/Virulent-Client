@@ -1,15 +1,15 @@
 # Virulent Client
 
-A Minecraft 1.21.4 utility client built on Fabric.
+A Minecraft 26.1.2 utility client built on Fabric.
 
 ## Requirements
 
-- **JDK 21** (required for Minecraft 1.21.4)
+- **JDK 25** (required for Minecraft 26.1.2)
 - **Fabric Loader** + **Fabric API** (included as dev dependencies)
 
 ## Setup
 
-1. Install [JDK 21](https://adoptium.net/) and ensure `java` is on your PATH.
+1. Install [JDK 25](https://adoptium.net/) and ensure `java` is on your PATH.
 2. Open this folder in IntelliJ IDEA (import the Gradle project).
 3. Run the client:
 
@@ -65,4 +65,4 @@ src/client/java/dev/virulent/client/
 
 ## Why Fabric?
 
-For Minecraft 1.21.4, a mod loader (Fabric) is the practical way to hook into the game. Alternatives like JNI injection (DLL-based clients) are possible but require C++/Rust, manual obfuscation mapping, and an injector — significantly more complex to develop and maintain.
+For Minecraft 26.1.2, a mod loader (Fabric) is the practical way to hook into the game. Alternatives like JNI injection (DLL-based clients) are possible but require C++/Rust, manual obfuscation mapping, and an injector — significantly more complex to develop and maintain.
