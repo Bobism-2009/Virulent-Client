@@ -6,6 +6,7 @@ import dev.virulent.client.config.HudSort;
 import dev.virulent.client.event.EventBus;
 import dev.virulent.client.event.events.Render2DEvent;
 import dev.virulent.client.module.Module;
+import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import org.lwjgl.glfw.GLFW;
@@ -36,25 +37,29 @@ public final class HudRenderer {
 			return;
 		}
 
-		long window = client.getWindow().handle();
-		boolean middleMouseDown = GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_MIDDLE) == GLFW.GLFW_PRESS;
-		double mouseX = client.mouseHandler.xpos();
-		double mouseY = client.mouseHandler.ypos();
+		Window window = client.getWindow();
+		boolean middleMouseDown = GLFW.glfwGetMouseButton(window.handle(), GLFW.GLFW_MOUSE_BUTTON_MIDDLE) == GLFW.GLFW_PRESS;
+		// mouseHandler reports raw window pixels; the HUD lives in GUI-scaled space.
+		double mouseX = client.mouseHandler.xpos() * window.getGuiScaledWidth() / window.getScreenWidth();
+		double mouseY = client.mouseHandler.ypos() * window.getGuiScaledHeight() / window.getScreenHeight();
 
-		if (middleMouseDown && !wasMiddleMouseDown && isMouseOverHud(mouseX, mouseY, client)) {
-			draggingHud = true;
-			dragOffsetX = (int) mouseX - guiSettings.getHudX();
-			dragOffsetY = (int) mouseY - guiSettings.getHudY();
-		}
+		if (middleMouseDown) {
+			List<Module> enabled = enabledModules(client);
+			if (!wasMiddleMouseDown && isMouseOverHud(mouseX, mouseY, client, enabled)) {
+				draggingHud = true;
+				dragOffsetX = (int) mouseX - guiSettings.getHudX();
+				dragOffsetY = (int) mouseY - guiSettings.getHudY();
+			}
 
-		if (draggingHud && middleMouseDown) {
-			int screenWidth = client.getWindow().getGuiScaledWidth();
-			int screenHeight = client.getWindow().getGuiScaledHeight();
-			int maxWidth = maxHudWidth(client);
-			int maxHeight = enabledModules(client).size() * ROW_HEIGHT;
-			int x = Math.max(0, Math.min((int) mouseX - dragOffsetX, screenWidth - maxWidth));
-			int y = Math.max(0, Math.min((int) mouseY - dragOffsetY, screenHeight - Math.max(ROW_HEIGHT, maxHeight)));
-			guiSettings.setHudPosition(x, y);
+			if (draggingHud) {
+				int screenWidth = window.getGuiScaledWidth();
+				int screenHeight = window.getGuiScaledHeight();
+				int maxWidth = maxHudWidth(client, enabled);
+				int maxHeight = enabled.size() * ROW_HEIGHT;
+				int x = Math.max(0, Math.min((int) mouseX - dragOffsetX, screenWidth - maxWidth));
+				int y = Math.max(0, Math.min((int) mouseY - dragOffsetY, screenHeight - Math.max(ROW_HEIGHT, maxHeight)));
+				guiSettings.setHudPosition(x, y);
+			}
 		}
 
 		if (!middleMouseDown) {
@@ -94,7 +99,7 @@ public final class HudRenderer {
 		}
 
 		if (draggingHud) {
-			int maxWidth = maxHudWidth(client);
+			int maxWidth = maxHudWidth(client, enabled);
 			int height = enabled.size() * ROW_HEIGHT;
 			context.fill(x, y - height, x + maxWidth, y, 0x33FFFFFF);
 		}
@@ -116,22 +121,21 @@ public final class HudRenderer {
 		};
 	}
 
-	private boolean isMouseOverHud(double mouseX, double mouseY, Minecraft client) {
-		List<Module> enabled = enabledModules(client);
+	private boolean isMouseOverHud(double mouseX, double mouseY, Minecraft client, List<Module> enabled) {
 		if (enabled.isEmpty()) {
 			return false;
 		}
 
 		int x = guiSettings.getHudX();
 		int y = guiSettings.getHudY();
-		int width = maxHudWidth(client);
+		int width = maxHudWidth(client, enabled);
 		int height = enabled.size() * ROW_HEIGHT;
 		return mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + height;
 	}
 
-	private int maxHudWidth(Minecraft client) {
+	private int maxHudWidth(Minecraft client, List<Module> enabled) {
 		int width = 0;
-		for (Module module : enabledModules(client)) {
+		for (Module module : enabled) {
 			width = Math.max(width, client.font.width(module.getName()) + 4);
 		}
 		return width + ROW_PADDING;
