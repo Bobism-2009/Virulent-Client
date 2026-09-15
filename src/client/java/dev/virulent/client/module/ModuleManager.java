@@ -10,6 +10,7 @@ import dev.virulent.client.module.modules.combat.KillAura;
 import dev.virulent.client.module.modules.combat.MaceKill;
 import dev.virulent.client.module.modules.combat.TriggerBot;
 import dev.virulent.client.module.modules.combat.Velocity;
+import dev.virulent.client.module.modules.misc.AntiKick;
 import dev.virulent.client.module.modules.misc.AutoReconnect;
 import dev.virulent.client.module.modules.misc.ChatFeedback;
 import dev.virulent.client.module.modules.misc.Freecam;
@@ -122,6 +123,7 @@ public final class ModuleManager {
 			new Freecam(),
 			new Teleport(),
 			new AutoReconnect(),
+			new AntiKick(),
 			new SeedCracker(),
 			new Friends(),
 			new ChatFeedback(),

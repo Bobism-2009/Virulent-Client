@@ -1,6 +1,7 @@
 package dev.virulent.client.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import dev.virulent.client.module.modules.misc.AntiKick;
 import dev.virulent.client.module.modules.movement.Flight;
 import dev.virulent.client.module.modules.movement.NoClip;
 import dev.virulent.client.module.modules.movement.NoFall;
@@ -78,13 +79,20 @@ public class LocalPlayerMixin {
 		}
 	}
 
+	/**
+	 * Both spoofs that rewrite what this packet reports run here, in this order: NoFall
+	 * decides whether to claim ground using the real position, then AntiKick may lower the
+	 * Y that vanilla is about to read. Both are undone on return, so only the packet sees them.
+	 */
 	@Inject(method = "sendPosition", at = @At("HEAD"))
-	private void virulent$noFallBegin(CallbackInfo ci) {
+	private void virulent$sendPositionPre(CallbackInfo ci) {
 		NoFall.beginSpoof();
+		AntiKick.beforeSendPosition();
 	}
 
 	@Inject(method = "sendPosition", at = @At("RETURN"))
-	private void virulent$noFallEnd(CallbackInfo ci) {
+	private void virulent$sendPositionPost(CallbackInfo ci) {
+		AntiKick.afterSendPosition();
 		NoFall.endSpoof();
 		if (NoFall.isActive()) {
 			((Entity) (Object) this).fallDistance = 0.0f;

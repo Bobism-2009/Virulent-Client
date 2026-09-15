@@ -76,7 +76,7 @@ Combat:   KillAura, Velocity, TriggerBot, AutoClicker, AutoTotem
 Movement: Sprint, Flight, Speed, Step, AirJump, NoFall, Jesus, NoSlow
 Render:   Fullbright, ESP, Tracers, ArmorHud, NoHurtCam, NoFire, Xray
 Player:   FastPlace, FastBreak, AutoTool, TreeBot, Tunneler, NoInteract
-Misc:     Zoom, Freecam, Teleport, Panic
+Misc:     Zoom, Freecam, Teleport, AntiKick, Panic
 
 ArmorHud shows equipped armor with durability (Bar / Percent / Both / None).
 
