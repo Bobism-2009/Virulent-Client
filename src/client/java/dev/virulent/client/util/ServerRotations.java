@@ -19,6 +19,18 @@ public final class ServerRotations {
 		}
 	}
 
+	/**
+	 * Drops any rotation state carried over from a previous connection. Without this the
+	 * last server-side yaw/pitch (and the tracking latch) survive into the next session,
+	 * so consumers like HandView would render against a stale rotation until the first
+	 * move packet of the new server arrives.
+	 */
+	public static void reset() {
+		yaw = 0.0f;
+		pitch = 0.0f;
+		tracking = false;
+	}
+
 	public static boolean isTracking() {
 		return tracking;
 	}

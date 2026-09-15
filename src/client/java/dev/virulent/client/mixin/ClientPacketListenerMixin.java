@@ -3,6 +3,7 @@ package dev.virulent.client.mixin;
 import dev.virulent.client.module.modules.combat.AutoTotem;
 import dev.virulent.client.module.modules.combat.Velocity;
 import dev.virulent.client.seed.SeedState;
+import dev.virulent.client.util.ServerRotations;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
@@ -77,5 +78,15 @@ public class ClientPacketListenerMixin {
 			return;
 		}
 		AutoTotem.onTotemPopped();
+	}
+
+	/**
+	 * {@code close()} is the session teardown path — {@code Minecraft.disconnect} calls it
+	 * whenever we leave a server or singleplayer world. Clearing tracked server rotations
+	 * here stops the previous session's yaw/pitch from leaking into the next one.
+	 */
+	@Inject(method = "close", at = @At("TAIL"))
+	private void virulent$resetServerRotations(CallbackInfo ci) {
+		ServerRotations.reset();
 	}
 }

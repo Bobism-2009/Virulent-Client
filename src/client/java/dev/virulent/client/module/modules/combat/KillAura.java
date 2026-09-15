@@ -49,6 +49,13 @@ public final class KillAura extends Module {
 
 	@Override
 	public void onTick() {
+		// Tick the CPS cooldown down first and unconditionally: folding the decrement into
+		// isAttackReady() meant a not-ready rotation short-circuited it away, freezing the
+		// cooldown mid-turn in Smooth mode.
+		if (attackCooldown > 0) {
+			attackCooldown--;
+		}
+
 		if (mc().player == null || mc().level == null || mc().gameMode == null) {
 			target = null;
 			return;
@@ -102,11 +109,7 @@ public final class KillAura extends Module {
 
 	private boolean isAttackReady() {
 		if ("CPS".equals(cooldownMode.getValue())) {
-			if (attackCooldown > 0) {
-				attackCooldown--;
-				return false;
-			}
-			return true;
+			return attackCooldown <= 0;
 		}
 
 		return mc().player.getAttackStrengthScale(0.5f) >= minStrength.getValue().floatValue();
