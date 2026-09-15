@@ -7,6 +7,7 @@ import dev.virulent.client.module.modules.movement.NoClip;
 import dev.virulent.client.module.modules.movement.NoFall;
 import dev.virulent.client.module.modules.movement.NoSlow;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.protocol.game.ServerboundMoveVehiclePacket;
 import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -80,23 +81,43 @@ public class LocalPlayerMixin {
 	}
 
 	/**
-	 * Both spoofs that rewrite what this packet reports run here, in this order: NoFall
-	 * decides whether to claim ground using the real position, then AntiKick may lower the
-	 * Y that vanilla is about to read. Both are undone on return, so only the packet sees them.
+	 * Both spoofs that rewrite what this packet reports run here. AntiKick goes first and
+	 * NoFall second, because NoFall's spoof makes {@code onGround()} answer true for the
+	 * rest of the call and AntiKick has to see the player as the world has them. Nothing
+	 * is lost by the order: NoFall decides on ground state and fall distance, neither of
+	 * which AntiKick's Y dip touches. Both are undone on return, so only the packet sees them.
 	 */
 	@Inject(method = "sendPosition", at = @At("HEAD"))
 	private void virulent$sendPositionPre(CallbackInfo ci) {
-		NoFall.beginSpoof();
 		AntiKick.beforeSendPosition();
+		NoFall.beginSpoof();
 	}
 
 	@Inject(method = "sendPosition", at = @At("RETURN"))
 	private void virulent$sendPositionPost(CallbackInfo ci) {
-		AntiKick.afterSendPosition();
 		NoFall.endSpoof();
+		AntiKick.afterSendPosition();
 		if (NoFall.isActive()) {
 			((Entity) (Object) this).fallDistance = 0.0f;
 		}
+	}
+
+	/**
+	 * A passenger reports the vehicle instead of itself, and the server floats the vehicle
+	 * on its own counter - the kick that ends a BoatFly session. Rewriting the packet on
+	 * its way out keeps the boat itself untouched.
+	 */
+	@ModifyExpressionValue(
+		method = "tick",
+		at = @At(
+			value = "INVOKE",
+			target = "Lnet/minecraft/network/protocol/game/ServerboundMoveVehiclePacket;"
+				+ "fromEntity(Lnet/minecraft/world/entity/Entity;)"
+				+ "Lnet/minecraft/network/protocol/game/ServerboundMoveVehiclePacket;"
+		)
+	)
+	private ServerboundMoveVehiclePacket virulent$antiKickVehicle(ServerboundMoveVehiclePacket packet) {
+		return AntiKick.onVehiclePacket(packet);
 	}
 
 	@Inject(method = "tick", at = @At("TAIL"))

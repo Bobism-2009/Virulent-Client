@@ -7,8 +7,11 @@ import dev.virulent.client.setting.NumberSetting;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import net.minecraft.network.protocol.game.ServerboundMoveVehiclePacket;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -29,6 +32,11 @@ import org.lwjgl.glfw.GLFW;
  * fall tick, and the next regular packet climbs back. Sending our own extra packet
  * instead would not work reliably - it would land in the same server tick as vanilla's,
  * and the later packet's flag is the one the tick loop reads.
+ *
+ * <p>Riding is the same kick with a different counter: a passenger sends
+ * {@code ServerboundMoveVehiclePacket} instead, and the server floats the <i>vehicle</i>
+ * against {@code aboveGroundVehicleTickCount}, which is what ends a BoatFly session.
+ * There we rewrite the outgoing packet directly - the boat itself is never touched.
  *
  * <p><b>Idle kick.</b> Vanilla's own keep-alive stops the read timeout, but AFK plugins
  * watch for position and rotation that never change. After the configured idle period we
@@ -51,7 +59,13 @@ public final class AntiKick extends Module {
 	private static AntiKick instance;
 
 	private final BooleanSetting flyKick = addSetting(new BooleanSetting("Fly Kick", true));
-	private final NumberSetting flyDelay = addSetting(new NumberSetting("Fly Delay", 40.0, 5.0, 70.0, 1.0));
+	/**
+	 * Ticks of float before we dip. Vanilla kicks past 80, so 20 leaves four attempts
+	 * inside the deadline: if the server happens to read a later packet in the same tick
+	 * as one dip - two move packets can land in one server tick whenever the two clocks
+	 * drift or the connection stutters - the next dip a second later still resets it.
+	 */
+	private final NumberSetting flyDelay = addSetting(new NumberSetting("Fly Delay", 20.0, 5.0, 70.0, 1.0));
 	private final BooleanSetting idleKick = addSetting(new BooleanSetting("Idle Kick", true));
 	private final NumberSetting idleDelay = addSetting(new NumberSetting("Idle Delay", 30.0, 5.0, 300.0, 5.0));
 
@@ -64,6 +78,10 @@ public final class AntiKick extends Module {
 	private double restoreX;
 	private double restoreY;
 	private double restoreZ;
+
+	private Entity lastVehicle;
+	private double vehicleLastSentY;
+	private int vehicleFloatingTicks;
 
 	private long idleSinceMs;
 	private double idleX;
@@ -99,6 +117,19 @@ public final class AntiKick extends Module {
 		if (instance != null) {
 			instance.undoDip();
 		}
+	}
+
+	/**
+	 * Called with the vehicle move packet a passenger is about to send, and returns the
+	 * packet that should actually go out. Rewriting the packet is enough here - unlike
+	 * the player's own move packet, this one is built from the vehicle every tick
+	 * regardless of whether it moved, so there is nothing to force.
+	 */
+	public static ServerboundMoveVehiclePacket onVehiclePacket(ServerboundMoveVehiclePacket packet) {
+		if (!isActive()) {
+			return packet;
+		}
+		return instance.dipVehicleForFlyKick(packet);
 	}
 
 	@Override
@@ -162,18 +193,21 @@ public final class AntiKick extends Module {
 
 		// Claiming we are lower than we are also moves us server-side, so only do it
 		// through open air. A block in the way would stop the server short of the claim
-		// and cost us a rubber-band - and with a block that close vanilla is not counting
-		// float ticks anyway, so there is nothing to reset.
+		// and cost us a rubber-band - and with a block that close vanilla's noBlocksAround
+		// means it is not counting float ticks at all, so there is nothing to reset.
 		AABB dipBox = player.getBoundingBox().move(0.0, -DIP, 0.0);
 		if (!level.noCollision(player, dipBox)) {
 			lastSentY = y;
+			floatingTicks = 0;
 			return;
 		}
 
 		restoreX = player.getX();
 		restoreY = y;
 		restoreZ = player.getZ();
-		double dippedY = lastSentY - DIP;
+		// Below both the real position and the last Y the server saw, so the claim is a
+		// descent whichever of the two it ends up being compared against.
+		double dippedY = Math.min(y, lastSentY) - DIP;
 		player.setPosRaw(restoreX, dippedY, restoreZ);
 		dipped = true;
 		lastSentY = dippedY;
@@ -194,9 +228,16 @@ public final class AntiKick extends Module {
 	/**
 	 * Mirrors the conditions under which a vanilla server counts a float tick against us.
 	 * Anything it would not count is not worth a dip.
+	 *
+	 * <p>Ground is judged by {@code verticalCollisionBelow} and not by {@code onGround()}
+	 * on purpose. It is what the server's own float check reads, and - the reason this
+	 * whole module did nothing for anyone flying with NoFall on - {@code onGround()} is
+	 * spoofed to true for the local player for the whole of {@code sendPosition}, which is
+	 * exactly when we run. Asking for it here answered NoFall's lie, not the world.
 	 */
 	private boolean isFloating(LocalPlayer player, double y) {
-		if (player.onGround() || player.isPassenger() || player.isSleeping() || player.isDeadOrDying()) {
+		if (player.verticalCollisionBelow || player.isPassenger() || player.isSleeping()
+			|| player.isDeadOrDying()) {
 			return false;
 		}
 		// Server-side flight permission, elytra, levitation and spin attacks are all
@@ -206,6 +247,59 @@ public final class AntiKick extends Module {
 			return false;
 		}
 		return y - lastSentY >= FLOAT_THRESHOLD;
+	}
+
+	/**
+	 * The vehicle half of the fly kick. The server floats the vehicle on the same
+	 * -0.03125 rule, against {@code vehicleLastGoodY} and its own counter, so the same
+	 * dip clears it. The exemptions differ: gravity and vehicle type are what matter, and
+	 * we deliberately do not read {@code isNoGravity()} - BoatFly sets that on the client
+	 * only, so the server's boat still falls and still counts.
+	 */
+	private ServerboundMoveVehiclePacket dipVehicleForFlyKick(ServerboundMoveVehiclePacket packet) {
+		LocalPlayer player = mc().player;
+		ClientLevel level = mc().level;
+		Entity vehicle = player == null ? null : player.getRootVehicle();
+		if (!flyKick.getValue() || level == null || vehicle == null || vehicle == player) {
+			resetVehicleState();
+			return packet;
+		}
+
+		double y = packet.position().y;
+		if (vehicle != lastVehicle) {
+			lastVehicle = vehicle;
+			vehicleLastSentY = y;
+			vehicleFloatingTicks = 0;
+			return packet;
+		}
+
+		if (vehicle.verticalCollisionBelow || vehicle.isFlyingVehicle() || packet.onGround()
+			|| y - vehicleLastSentY < FLOAT_THRESHOLD) {
+			vehicleLastSentY = y;
+			vehicleFloatingTicks = 0;
+			return packet;
+		}
+
+		vehicleFloatingTicks++;
+		if (vehicleFloatingTicks < flyDelay.getValue().intValue()) {
+			vehicleLastSentY = y;
+			return packet;
+		}
+
+		AABB dipBox = vehicle.getBoundingBox().move(0.0, -DIP, 0.0);
+		if (!level.noCollision(vehicle, dipBox)) {
+			vehicleLastSentY = y;
+			vehicleFloatingTicks = 0;
+			return packet;
+		}
+
+		double dippedY = Math.min(y, vehicleLastSentY) - DIP;
+		vehicleLastSentY = dippedY;
+		vehicleFloatingTicks = 0;
+		Vec3 position = packet.position();
+		return new ServerboundMoveVehiclePacket(
+			new Vec3(position.x, dippedY, position.z), packet.yRot(), packet.xRot(), packet.onGround()
+		);
 	}
 
 	private void tickIdle(LocalPlayer player) {
@@ -260,5 +354,11 @@ public final class AntiKick extends Module {
 		hasLastSentY = false;
 		floatingTicks = 0;
 		dipped = false;
+		resetVehicleState();
+	}
+
+	private void resetVehicleState() {
+		lastVehicle = null;
+		vehicleFloatingTicks = 0;
 	}
 }
