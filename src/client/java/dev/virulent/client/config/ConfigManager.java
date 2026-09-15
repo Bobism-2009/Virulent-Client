@@ -22,6 +22,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -245,7 +246,7 @@ public final class ConfigManager {
 		}
 		try {
 			ensureDirs();
-			Files.writeString(getProfilePath(sanitized), GSON.toJson(serializeModules()));
+			writeAtomically(getProfilePath(sanitized), GSON.toJson(serializeModules()));
 			return true;
 		} catch (IOException exception) {
 			VirulentClient.LOGGER.error("Failed to back up profile {}", sanitized, exception);
@@ -322,9 +323,9 @@ public final class ConfigManager {
 		JsonObject root = serializeModules();
 		try {
 			ensureDirs();
-			Path profilePath = getProfilePath(activeProfile);
-			Files.writeString(profilePath, GSON.toJson(root));
-			Files.writeString(getLegacyConfigPath(), GSON.toJson(root));
+			String json = GSON.toJson(root);
+			writeAtomically(getProfilePath(activeProfile), json);
+			writeAtomically(getLegacyConfigPath(), json);
 			saveMeta();
 		} catch (IOException exception) {
 			VirulentClient.LOGGER.error("Failed to save config", exception);
@@ -342,6 +343,9 @@ public final class ConfigManager {
 			applyModules(root);
 		} catch (IOException exception) {
 			VirulentClient.LOGGER.error("Failed to load config from {}", path, exception);
+		} catch (RuntimeException exception) {
+			// Truncated or hand-edited JSON: keep defaults rather than crashing the client on startup.
+			VirulentClient.LOGGER.error("Config at {} is corrupt, falling back to defaults", path, exception);
 		} finally {
 			loading = false;
 		}
@@ -349,25 +353,43 @@ public final class ConfigManager {
 
 	private void applyModules(JsonObject root) {
 		for (Module module : VirulentClient.getInstance().getModuleManager().getModules()) {
-			if (!root.has(module.getName())) {
+			JsonElement moduleElement = root.get(module.getName());
+			if (moduleElement == null || !moduleElement.isJsonObject()) {
 				continue;
 			}
 
-			JsonObject moduleJson = root.getAsJsonObject(module.getName());
+			JsonObject moduleJson = moduleElement.getAsJsonObject();
 			if (moduleJson.has("enabled")) {
-				module.setEnabled(moduleJson.get("enabled").getAsBoolean());
+				try {
+					module.setEnabled(moduleJson.get("enabled").getAsBoolean());
+				} catch (RuntimeException exception) {
+					logBadEntry(module.getName(), "enabled", exception);
+				}
 			}
 			if (moduleJson.has("keyBind")) {
-				module.setKeyBind(moduleJson.get("keyBind").getAsInt());
+				try {
+					module.setKeyBind(moduleJson.get("keyBind").getAsInt());
+				} catch (RuntimeException exception) {
+					logBadEntry(module.getName(), "keyBind", exception);
+				}
 			}
 
 			for (Setting<?> setting : module.getSettings()) {
 				if (!moduleJson.has(setting.getName())) {
 					continue;
 				}
-				applySetting(setting, moduleJson.get(setting.getName()));
+				// One malformed setting must not discard the rest of the profile.
+				try {
+					applySetting(setting, moduleJson.get(setting.getName()));
+				} catch (RuntimeException exception) {
+					logBadEntry(module.getName(), setting.getName(), exception);
+				}
 			}
 		}
+	}
+
+	private static void logBadEntry(String moduleName, String key, RuntimeException exception) {
+		VirulentClient.LOGGER.warn("Ignoring malformed config entry {}.{}: {}", moduleName, key, exception.toString());
 	}
 
 	private JsonObject serializeModules() {
@@ -389,7 +411,7 @@ public final class ConfigManager {
 		Path defaultProfile = getProfilePath(DEFAULT_PROFILE);
 		if (Files.exists(legacy) && !Files.exists(defaultProfile)) {
 			try {
-				Files.copy(legacy, defaultProfile, StandardCopyOption.REPLACE_EXISTING);
+				copyAtomically(legacy, defaultProfile);
 				if (activeProfile == null || activeProfile.isBlank()) {
 					activeProfile = DEFAULT_PROFILE;
 				}
@@ -404,7 +426,7 @@ public final class ConfigManager {
 		try {
 			Path profilePath = getProfilePath(activeProfile);
 			if (Files.exists(profilePath)) {
-				Files.copy(profilePath, getLegacyConfigPath(), StandardCopyOption.REPLACE_EXISTING);
+				copyAtomically(profilePath, getLegacyConfigPath());
 			}
 		} catch (IOException exception) {
 			VirulentClient.LOGGER.error("Failed to mirror active profile", exception);
@@ -413,30 +435,28 @@ public final class ConfigManager {
 
 	private void loadMeta() {
 		Path meta = getMetaPath();
+		activeProfile = DEFAULT_PROFILE;
+		autoSwitchServers = true;
+		serverProfiles.clear();
 		if (!Files.exists(meta)) {
-			activeProfile = DEFAULT_PROFILE;
-			autoSwitchServers = true;
-			serverProfiles.clear();
 			return;
 		}
 		try {
 			JsonObject root = GSON.fromJson(Files.readString(meta), JsonObject.class);
 			if (root == null) {
-				activeProfile = DEFAULT_PROFILE;
 				return;
 			}
-			if (root.has("active")) {
-				String name = sanitizeName(root.get("active").getAsString());
-				if (name != null) {
-					activeProfile = name;
-				}
+			String name = root.has("active") ? sanitizeName(asStringOrNull(root.get("active"))) : null;
+			if (name != null) {
+				activeProfile = name;
 			}
-			autoSwitchServers = !root.has("autoSwitchServers") || root.get("autoSwitchServers").getAsBoolean();
-			serverProfiles.clear();
+			autoSwitchServers = !root.has("autoSwitchServers")
+				|| !root.get("autoSwitchServers").isJsonPrimitive()
+				|| root.get("autoSwitchServers").getAsBoolean();
 			if (root.has("servers") && root.get("servers").isJsonObject()) {
 				for (var entry : root.getAsJsonObject("servers").entrySet()) {
 					String key = normalizeServerKey(entry.getKey());
-					String profile = sanitizeName(entry.getValue().getAsString());
+					String profile = sanitizeName(asStringOrNull(entry.getValue()));
 					if (key != null && profile != null) {
 						serverProfiles.put(key, profile);
 					}
@@ -445,7 +465,16 @@ public final class ConfigManager {
 		} catch (IOException exception) {
 			VirulentClient.LOGGER.error("Failed to load profile meta", exception);
 			activeProfile = DEFAULT_PROFILE;
+		} catch (RuntimeException exception) {
+			VirulentClient.LOGGER.error("Profile meta is corrupt, falling back to defaults", exception);
+			activeProfile = DEFAULT_PROFILE;
+			autoSwitchServers = true;
+			serverProfiles.clear();
 		}
+	}
+
+	private static String asStringOrNull(JsonElement element) {
+		return element != null && element.isJsonPrimitive() ? element.getAsString() : null;
 	}
 
 	private void saveMeta() {
@@ -459,9 +488,50 @@ public final class ConfigManager {
 		root.add("servers", servers);
 		try {
 			ensureDirs();
-			Files.writeString(getMetaPath(), GSON.toJson(root));
+			writeAtomically(getMetaPath(), GSON.toJson(root));
 		} catch (IOException exception) {
 			VirulentClient.LOGGER.error("Failed to save profile meta", exception);
+		}
+	}
+
+	/**
+	 * Writes to {@code <target>.tmp} and renames it over {@code target}, so a crash mid-write
+	 * leaves the previous config intact instead of a truncated file the next launch cannot parse.
+	 */
+	private static void writeAtomically(Path target, String contents) throws IOException {
+		Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
+		try {
+			Files.writeString(tmp, contents);
+			moveIntoPlace(tmp, target);
+		} finally {
+			deleteQuietly(tmp);
+		}
+	}
+
+	/** Same guarantee as {@link #writeAtomically} for file-to-file copies. */
+	private static void copyAtomically(Path source, Path target) throws IOException {
+		Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
+		try {
+			Files.copy(source, tmp, StandardCopyOption.REPLACE_EXISTING);
+			moveIntoPlace(tmp, target);
+		} finally {
+			deleteQuietly(tmp);
+		}
+	}
+
+	private static void moveIntoPlace(Path tmp, Path target) throws IOException {
+		try {
+			Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+		} catch (AtomicMoveNotSupportedException exception) {
+			Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+		}
+	}
+
+	private static void deleteQuietly(Path tmp) {
+		try {
+			Files.deleteIfExists(tmp);
+		} catch (IOException ignored) {
+			// Leftover temp file is harmless; the next save overwrites it.
 		}
 	}
 
