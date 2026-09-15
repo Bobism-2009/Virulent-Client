@@ -7,6 +7,7 @@ import dev.virulent.client.module.ModuleManager;
 import dev.virulent.client.setting.BooleanSetting;
 import dev.virulent.client.setting.ModeSetting;
 import dev.virulent.client.setting.NumberSetting;
+import dev.virulent.client.util.PacketBudget;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
@@ -103,9 +104,7 @@ public final class Criticals extends Module {
 			if (mc().player.isFallFlying()) {
 				return;
 			}
-			sendPacket(0);
-			sendPacket(1.501 + extraHeight.getValue());
-			sendPacket(0);
+			sendSpoof(0, 1.501 + extraHeight.getValue(), 0);
 			return;
 		}
 
@@ -126,19 +125,9 @@ public final class Criticals extends Module {
 		}
 
 		switch (mode.getValue()) {
-			case "Packet" -> {
-				sendPacket(0.0625);
-				sendPacket(0);
-			}
-			case "UpdatedNCP" -> {
-				sendPacket(0.0000008);
-				sendPacket(0);
-			}
-			case "OldNCP" -> {
-				sendPacket(0.11);
-				sendPacket(0.1100013579);
-				sendPacket(0.0000013579);
-			}
+			case "Packet" -> sendSpoof(0.0625, 0);
+			case "UpdatedNCP" -> sendSpoof(0.0000008, 0);
+			case "OldNCP" -> sendSpoof(0.11, 0.1100013579, 0.0000013579);
 			case "Jump", "MiniJump" -> {
 				if (!sendPackets) {
 					sendPackets = true;
@@ -183,12 +172,16 @@ public final class Criticals extends Module {
 				return;
 			}
 
+			// The held-back attack and swing are the hit itself, not the spoof
+			// around it; charge them to the budget but never drop them.
+			PacketBudget.openPriority(2);
 			sending = true;
 			try {
 				mc().getConnection().send(attackPacket);
 				mc().getConnection().send(swingPacket);
 			} finally {
 				sending = false;
+				PacketBudget.close();
 			}
 
 			attackPacket = null;
@@ -196,6 +189,26 @@ public final class Criticals extends Module {
 			sendPackets = false;
 		} else {
 			sendTimer--;
+		}
+	}
+
+	/**
+	 * Sends one fall-spoof sequence against the shared packet budget. The whole
+	 * run is reserved up front: every sequence ends by moving back to the real
+	 * height, so a truncated one would leave the server holding a position the
+	 * client never returns from. If the budget cannot cover it, the crit is
+	 * skipped and the hit lands as a normal attack.
+	 */
+	private void sendSpoof(double... heights) {
+		boolean afforded = PacketBudget.open(heights.length);
+		try {
+			if (afforded) {
+				for (double height : heights) {
+					sendPacket(height);
+				}
+			}
+		} finally {
+			PacketBudget.close();
 		}
 	}
 

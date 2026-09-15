@@ -4,6 +4,7 @@ import dev.virulent.client.module.Category;
 import dev.virulent.client.module.Module;
 import dev.virulent.client.setting.BooleanSetting;
 import dev.virulent.client.setting.NumberSetting;
+import dev.virulent.client.util.PacketBudget;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -37,9 +38,11 @@ import java.util.Set;
  *
  * Underground Mode: fall distance is banked with an in-place vertical column
  * flown server-side with staged move packets capped at TP Speed (max 200
- * blocks/second, i.e. 10 blocks per tick) AND at a per-tick packet budget
- * that stays under server packet-rate limiters, each waypoint collision-free,
- * so strict movement checks accept every step. The server sums every downward
+ * blocks/second, i.e. 10 blocks per tick) AND at the client-wide
+ * {@link dev.virulent.client.util.PacketBudget} shared with every other spammy
+ * module, so the combination stays under server packet-rate limiters; each
+ * waypoint is collision-free, so strict movement checks accept every step.
+ * The server sums every downward
  * delta into fall distance while airborne, so each ascend + descend round trip
  * banks the column height; cycles repeat until the target fall is reached. A
  * column banks fall at the maximum possible rate (half of TP Speed) no matter
@@ -82,14 +85,6 @@ public final class MaceKill extends Module {
 	private static final double FINE_CLEARANCE_STEP = 0.05;
 	/** Safety gap kept below the ceiling so the head never exactly touches. */
 	private static final double CLEARANCE_MARGIN = 0.02;
-	/**
-	 * Move packets per tick ceiling. Paper's default packet limiter kicks any
-	 * client averaging over 500 packets/second ("sent too many packets!"), and
-	 * sub-block columns hit this ceiling every tick, so it has to leave room
-	 * for the client's normal traffic: 8 moves/tick = 160/s, under a third of
-	 * the default limit.
-	 */
-	private static final int MAX_MOVES_PER_TICK = 8;
 	/** Pathfinder node budget per route computation. */
 	private static final int MAX_SEARCH_NODES = 4096;
 	/** Longest route (in waypoints) worth flying per cycle. */
@@ -214,22 +209,25 @@ public final class MaceKill extends Module {
 		}
 
 		double budget = tpSpeed.getValue() / 20.0;
-		int movesSent = 0;
-		while (budget > 1.0E-4 && movesSent < MAX_MOVES_PER_TICK && phase != Phase.IDLE) {
+		while (budget > 1.0E-4 && phase != Phase.IDLE) {
 			Vec3 next = route.get(nextIndex);
 			double dist = routePos.distanceTo(next);
 			if (dist > budget) {
 				Vec3 partial = routePos.add(next.subtract(routePos).scale(budget / dist));
-				trackFall(partial);
-				sendMove(partial);
-				routePos = partial;
+				if (sendRouteMove(partial)) {
+					trackFall(partial);
+					routePos = partial;
+				}
 				return;
 			}
 
+			// Out of shared packet budget: hold position and resume next tick
+			// rather than advancing past a waypoint the server never received.
+			if (!sendRouteMove(next)) {
+				return;
+			}
 			budget -= dist;
 			trackFall(next);
-			sendMove(next);
-			movesSent++;
 			routePos = next;
 
 			if (phase == Phase.ASCEND) {
@@ -321,9 +319,14 @@ public final class MaceKill extends Module {
 		}
 
 		lastAttackFall = accumulatedFall;
+		// The attack is the payload of the whole route, and the rot spam is what
+		// makes it register, so both send unconditionally - but both are charged
+		// to the shared budget, which throttles the route moves above instead.
+		int spam = spamPackets.getValue().intValue();
+		PacketBudget.openPriority(spam);
 		sendingRouteMove = true;
 		try {
-			for (int i = 0; i < spamPackets.getValue().intValue(); i++) {
+			for (int i = 0; i < spam; i++) {
 				mc().player.connection.send(new ServerboundMovePlayerPacket.Rot(
 					mc().player.getYRot(),
 					mc().player.getXRot(),
@@ -333,8 +336,12 @@ public final class MaceKill extends Module {
 			}
 		} finally {
 			sendingRouteMove = false;
+			PacketBudget.close();
 		}
 
+		// Swinging costs two packets, not one: LocalPlayer#swing sends a
+		// ServerboundSwingPacket of its own on top of the explicit one.
+		PacketBudget.openPriority(swingArm.getValue() ? 3 : 1);
 		sendingAttacks = true;
 		try {
 			if (swingArm.getValue()) {
@@ -344,6 +351,7 @@ public final class MaceKill extends Module {
 			mc().player.connection.send(new ServerboundAttackPacket(target.getId()));
 		} finally {
 			sendingAttacks = false;
+			PacketBudget.close();
 		}
 		return true;
 	}
@@ -476,7 +484,7 @@ public final class MaceKill extends Module {
 			}
 			double estSeconds = Math.max(
 				2.0 * routeLength * estCycles / tpSpeed.getValue(),
-				2.0 * (route.size() - 1) * estCycles / (MAX_MOVES_PER_TICK * 20.0));
+				2.0 * (route.size() - 1) * estCycles / PacketBudget.MODULE_PACKETS_PER_SECOND);
 			feedback("Route: " + String.format("%.1f", fallPerCycle) + "b fall/cycle, ~" + estCycles
 				+ " cycle" + (estCycles == 1 ? "" : "s") + " @ <=" + tpSpeed.getValue().intValue()
 				+ " b/s (~" + String.format("%.1f", estSeconds) + "s)");
@@ -706,6 +714,26 @@ public final class MaceKill extends Module {
 		double cz = pos.getZ() + 0.5;
 		AABB box = new AABB(cx - 0.3, pos.getY(), cz - 0.3, cx + 0.3, pos.getY() + 1.8, cz + 0.3);
 		return !mc().level.getBlockCollisions(mc().player, box).iterator().hasNext();
+	}
+
+	/**
+	 * Sends one route waypoint against the shared packet budget. Route moves
+	 * are reserved one at a time because the route resumes cleanly next tick,
+	 * but a waypoint that is sent and then dropped would desync {@link #routePos}
+	 * from the server's idea of where we are.
+	 *
+	 * @return false when the budget is spent and nothing was sent
+	 */
+	private boolean sendRouteMove(Vec3 pos) {
+		boolean afforded = PacketBudget.open(1);
+		try {
+			if (afforded) {
+				sendMove(pos);
+			}
+		} finally {
+			PacketBudget.close();
+		}
+		return afforded;
 	}
 
 	private void sendMove(Vec3 pos) {

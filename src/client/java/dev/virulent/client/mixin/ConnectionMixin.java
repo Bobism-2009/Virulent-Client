@@ -3,6 +3,7 @@ package dev.virulent.client.mixin;
 import dev.virulent.client.module.modules.combat.Criticals;
 import dev.virulent.client.module.modules.combat.MaceKill;
 import dev.virulent.client.module.modules.player.AntiHunger;
+import dev.virulent.client.util.PacketBudget;
 import dev.virulent.client.util.ServerRotations;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
@@ -42,6 +43,16 @@ public class ConnectionMixin {
 
 		if (packet instanceof ServerboundAttackPacket attackPacket) {
 			MaceKill.onAttackPacket(attackPacket, ci);
+			if (ci.isCancelled()) {
+				return;
+			}
+		}
+
+		// Last, because everything that reaches here is genuinely about to leave:
+		// count it against the shared outbound budget, and drop it if it is a
+		// module packet the budget can no longer afford.
+		if (!PacketBudget.onOutgoing()) {
+			ci.cancel();
 		}
 	}
 }

@@ -5,6 +5,7 @@ import dev.virulent.client.module.Module;
 import dev.virulent.client.mixin.ClientLevelAccessor;
 import dev.virulent.client.setting.BooleanSetting;
 import dev.virulent.client.setting.NumberSetting;
+import dev.virulent.client.util.PacketBudget;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 import net.minecraft.world.InteractionHand;
@@ -61,11 +62,21 @@ public final class CrossbowMachineGun extends Module {
 			sequence = ((ClientLevelAccessor) clientLevel).virulent$getBlockStatePredictionHandler().currentSequence();
 		}
 
-		mc().getConnection().send(new ServerboundUseItemPacket(
-			hand,
-			sequence,
-			mc().player.getYRot(),
-			mc().player.getXRot()
-		));
+		// One shot per tick is cheap on its own, but it shares the outbound
+		// budget with the move spam from MaceKill / Criticals; a shot skipped
+		// here costs a bolt, a packet-limiter kick costs the session.
+		boolean afforded = PacketBudget.open(1);
+		try {
+			if (afforded) {
+				mc().getConnection().send(new ServerboundUseItemPacket(
+					hand,
+					sequence,
+					mc().player.getYRot(),
+					mc().player.getXRot()
+				));
+			}
+		} finally {
+			PacketBudget.close();
+		}
 	}
 }
