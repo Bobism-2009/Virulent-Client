@@ -6,6 +6,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import dev.virulent.client.VirulentClient;
+import dev.virulent.client.config.ConfigFiles;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
@@ -118,14 +119,26 @@ public final class FriendsManager {
 			if (root == null || !root.has("friends") || !root.get("friends").isJsonArray()) {
 				return;
 			}
-			friends.clear();
+			List<String> loaded = new ArrayList<>();
 			for (JsonElement element : root.getAsJsonArray("friends")) {
-				if (element.isJsonPrimitive()) {
-					addQuiet(element.getAsString());
+				if (!element.isJsonPrimitive()) {
+					continue;
+				}
+				// One malformed entry must not discard the rest of the list.
+				try {
+					loaded.add(element.getAsString());
+				} catch (RuntimeException exception) {
+					VirulentClient.LOGGER.warn("Ignoring malformed friend entry: {}", exception.toString());
 				}
 			}
+			friends.clear();
+			loaded.forEach(this::addQuiet);
 		} catch (IOException exception) {
 			VirulentClient.LOGGER.error("Failed to load friends", exception);
+		} catch (RuntimeException exception) {
+			// A torn friends.json must not take the whole client down on launch.
+			VirulentClient.LOGGER.error("friends.json is corrupt, starting with no friends", exception);
+			friends.clear();
 		}
 	}
 
@@ -141,7 +154,7 @@ public final class FriendsManager {
 		try {
 			Path path = getPath();
 			Files.createDirectories(path.getParent());
-			Files.writeString(path, GSON.toJson(root));
+			ConfigFiles.writeAtomically(path, GSON.toJson(root));
 		} catch (IOException exception) {
 			VirulentClient.LOGGER.error("Failed to save friends", exception);
 		}

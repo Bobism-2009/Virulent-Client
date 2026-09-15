@@ -6,6 +6,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import dev.virulent.client.VirulentClient;
+import dev.virulent.client.config.ConfigFiles;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 
@@ -125,14 +126,24 @@ public final class WaypointManager {
 			}
 			List<Waypoint> loaded = new ArrayList<>();
 			for (JsonElement element : root.getAsJsonArray("waypoints")) {
-				if (element.isJsonObject()) {
+				if (!element.isJsonObject()) {
+					continue;
+				}
+				// One malformed entry must not discard the rest of the list.
+				try {
 					loaded.add(Waypoint.fromJson(element.getAsJsonObject()));
+				} catch (RuntimeException exception) {
+					VirulentClient.LOGGER.warn("Ignoring malformed waypoint: {}", exception.toString());
 				}
 			}
 			waypoints.clear();
 			waypoints.addAll(loaded);
 		} catch (IOException exception) {
 			VirulentClient.LOGGER.error("Failed to load waypoints", exception);
+		} catch (RuntimeException exception) {
+			// A torn waypoints.json must not take the whole client down on launch.
+			VirulentClient.LOGGER.error("waypoints.json is corrupt, starting with no waypoints", exception);
+			waypoints.clear();
 		}
 	}
 
@@ -146,7 +157,7 @@ public final class WaypointManager {
 		try {
 			Path path = getPath();
 			Files.createDirectories(path.getParent());
-			Files.writeString(path, GSON.toJson(root));
+			ConfigFiles.writeAtomically(path, GSON.toJson(root));
 		} catch (IOException exception) {
 			VirulentClient.LOGGER.error("Failed to save waypoints", exception);
 		}

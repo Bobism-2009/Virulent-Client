@@ -22,11 +22,9 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 
 import java.io.IOException;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -246,7 +244,7 @@ public final class ConfigManager {
 		}
 		try {
 			ensureDirs();
-			writeAtomically(getProfilePath(sanitized), GSON.toJson(serializeModules()));
+			ConfigFiles.writeAtomically(getProfilePath(sanitized), GSON.toJson(serializeModules()));
 			return true;
 		} catch (IOException exception) {
 			VirulentClient.LOGGER.error("Failed to back up profile {}", sanitized, exception);
@@ -324,8 +322,8 @@ public final class ConfigManager {
 		try {
 			ensureDirs();
 			String json = GSON.toJson(root);
-			writeAtomically(getProfilePath(activeProfile), json);
-			writeAtomically(getLegacyConfigPath(), json);
+			ConfigFiles.writeAtomically(getProfilePath(activeProfile), json);
+			ConfigFiles.writeAtomically(getLegacyConfigPath(), json);
 			saveMeta();
 		} catch (IOException exception) {
 			VirulentClient.LOGGER.error("Failed to save config", exception);
@@ -411,7 +409,7 @@ public final class ConfigManager {
 		Path defaultProfile = getProfilePath(DEFAULT_PROFILE);
 		if (Files.exists(legacy) && !Files.exists(defaultProfile)) {
 			try {
-				copyAtomically(legacy, defaultProfile);
+				ConfigFiles.copyAtomically(legacy, defaultProfile);
 				if (activeProfile == null || activeProfile.isBlank()) {
 					activeProfile = DEFAULT_PROFILE;
 				}
@@ -426,7 +424,7 @@ public final class ConfigManager {
 		try {
 			Path profilePath = getProfilePath(activeProfile);
 			if (Files.exists(profilePath)) {
-				copyAtomically(profilePath, getLegacyConfigPath());
+				ConfigFiles.copyAtomically(profilePath, getLegacyConfigPath());
 			}
 		} catch (IOException exception) {
 			VirulentClient.LOGGER.error("Failed to mirror active profile", exception);
@@ -488,50 +486,9 @@ public final class ConfigManager {
 		root.add("servers", servers);
 		try {
 			ensureDirs();
-			writeAtomically(getMetaPath(), GSON.toJson(root));
+			ConfigFiles.writeAtomically(getMetaPath(), GSON.toJson(root));
 		} catch (IOException exception) {
 			VirulentClient.LOGGER.error("Failed to save profile meta", exception);
-		}
-	}
-
-	/**
-	 * Writes to {@code <target>.tmp} and renames it over {@code target}, so a crash mid-write
-	 * leaves the previous config intact instead of a truncated file the next launch cannot parse.
-	 */
-	private static void writeAtomically(Path target, String contents) throws IOException {
-		Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
-		try {
-			Files.writeString(tmp, contents);
-			moveIntoPlace(tmp, target);
-		} finally {
-			deleteQuietly(tmp);
-		}
-	}
-
-	/** Same guarantee as {@link #writeAtomically} for file-to-file copies. */
-	private static void copyAtomically(Path source, Path target) throws IOException {
-		Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
-		try {
-			Files.copy(source, tmp, StandardCopyOption.REPLACE_EXISTING);
-			moveIntoPlace(tmp, target);
-		} finally {
-			deleteQuietly(tmp);
-		}
-	}
-
-	private static void moveIntoPlace(Path tmp, Path target) throws IOException {
-		try {
-			Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-		} catch (AtomicMoveNotSupportedException exception) {
-			Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
-		}
-	}
-
-	private static void deleteQuietly(Path tmp) {
-		try {
-			Files.deleteIfExists(tmp);
-		} catch (IOException ignored) {
-			// Leftover temp file is harmless; the next save overwrites it.
 		}
 	}
 

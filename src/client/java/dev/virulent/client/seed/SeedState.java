@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import dev.virulent.client.VirulentClient;
+import dev.virulent.client.config.ConfigFiles;
 import dev.virulent.client.mixin.PrimaryLevelDataAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.server.IntegratedServer;
@@ -132,7 +133,7 @@ public final class SeedState {
 		try {
 			Path path = path();
 			Files.createDirectories(path.getParent());
-			Files.writeString(path, GSON.toJson(root));
+			ConfigFiles.writeAtomically(path, GSON.toJson(root));
 		} catch (IOException exception) {
 			VirulentClient.LOGGER.error("Failed to save seed state", exception);
 		}

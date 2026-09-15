@@ -2,6 +2,7 @@ package dev.virulent.client.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import dev.virulent.client.VirulentClient;
 import dev.virulent.client.gui.clickgui.CategoryPanelState;
@@ -14,33 +15,60 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.EnumSet;
 import java.util.Set;
+import java.util.function.Consumer;
 
 public final class GuiSettings {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static final long SAVE_DEBOUNCE_MS = 300;
 
-	private GuiLayoutStyle layoutStyle = GuiLayoutStyle.DEFAULT;
-	private int accentColor = GuiLayoutStyle.DEFAULT.defaultAccent();
-	private int headerColor = GuiLayoutStyle.DEFAULT.defaultHeader();
-	private int windowWidth = 260;
-	private int windowHeight = 0;
-	private int windowX = 10;
-	private int windowY = 10;
-	private int scrollOffset = 0;
-	private boolean showDescriptions = true;
-	private boolean showKeybinds = true;
-	private Category selectedCategory = Category.COMBAT;
-	private int hudX = 4;
-	private int hudY = 4;
-	private HudSort hudSort = HudSort.LENGTH;
-	private boolean hudVisible = true;
-	private boolean hudBlack = false;
+	private GuiLayoutStyle layoutStyle;
+	private int accentColor;
+	private int headerColor;
+	private int windowWidth;
+	private int windowHeight;
+	private int windowX;
+	private int windowY;
+	private int scrollOffset;
+	private boolean showDescriptions;
+	private boolean showKeybinds;
+	private Category selectedCategory;
+	private int hudX;
+	private int hudY;
+	private HudSort hudSort;
+	private boolean hudVisible;
+	private boolean hudBlack;
 	private final CategoryPanelState categoryPanels = new CategoryPanelState();
 
 	private long saveDeadline;
 	private boolean loading;
 
 	private final Set<Category> collapsedCategories = EnumSet.noneOf(Category.class);
+
+	public GuiSettings() {
+		resetToDefaults();
+	}
+
+	/** Single source of truth for the shipped defaults, also used when {@code gui.json} is unreadable. */
+	private void resetToDefaults() {
+		layoutStyle = GuiLayoutStyle.DEFAULT;
+		accentColor = GuiLayoutStyle.DEFAULT.defaultAccent();
+		headerColor = GuiLayoutStyle.DEFAULT.defaultHeader();
+		windowWidth = 260;
+		windowHeight = 0;
+		windowX = 10;
+		windowY = 10;
+		scrollOffset = 0;
+		showDescriptions = true;
+		showKeybinds = true;
+		selectedCategory = Category.COMBAT;
+		hudX = 4;
+		hudY = 4;
+		hudSort = HudSort.LENGTH;
+		hudVisible = true;
+		hudBlack = false;
+		collapsedCategories.clear();
+		categoryPanels.resetDefaults(layoutStyle);
+	}
 
 	public GuiLayoutStyle getLayoutStyle() {
 		return layoutStyle;
@@ -256,116 +284,149 @@ public final class GuiSettings {
 			if (json == null) {
 				return;
 			}
-			if (json.has("layout")) {
-				layoutStyle = GuiLayoutStyle.fromName(json.get("layout").getAsString());
-			} else if (json.has("theme")) {
-				layoutStyle = GuiLayoutStyle.fromName(json.get("theme").getAsString());
-			}
-			if (json.has("accentColor")) {
-				accentColor = json.get("accentColor").getAsInt();
-			}
-			if (json.has("headerColor")) {
-				headerColor = json.get("headerColor").getAsInt();
-			}
-			if (json.has("showDescriptions")) {
-				showDescriptions = json.get("showDescriptions").getAsBoolean();
-			}
-			if (json.has("showKeybinds")) {
-				showKeybinds = json.get("showKeybinds").getAsBoolean();
-			}
-			if (json.has("hud")) {
-				JsonObject hud = json.getAsJsonObject("hud");
-				if (hud.has("x")) {
-					hudX = hud.get("x").getAsInt();
-				}
-				if (hud.has("y")) {
-					hudY = hud.get("y").getAsInt();
-				}
-				if (hud.has("sort")) {
-					try {
-						hudSort = HudSort.valueOf(hud.get("sort").getAsString());
-					} catch (IllegalArgumentException ignored) {
-					}
-				}
-				if (hud.has("visible")) {
-					hudVisible = hud.get("visible").getAsBoolean();
-				}
-				if (hud.has("black")) {
-					hudBlack = hud.get("black").getAsBoolean();
-				}
-			}
+			applyAppearance(json);
+			applyHud(objectOrNull(json, "hud"));
 
 			collapsedCategories.clear();
-
-			if (json.has("categoryPanels")) {
-				JsonObject panels = json.getAsJsonObject("categoryPanels");
-				for (Category category : Category.values()) {
-					if (!panels.has(category.name())) {
-						continue;
-					}
-					JsonObject panel = panels.getAsJsonObject(category.name());
-					categoryPanels.set(
-						category,
-						panel.has("x") ? panel.get("x").getAsInt() : 20,
-						panel.has("y") ? panel.get("y").getAsInt() : 20,
-						panel.has("collapsed") && panel.get("collapsed").getAsBoolean()
-					);
-				}
-			} else {
-				categoryPanels.resetDefaults(layoutStyle);
-			}
-
-			if (json.has("window")) {
-				JsonObject window = json.getAsJsonObject("window");
-				if (window.has("x")) {
-					windowX = window.get("x").getAsInt();
-				}
-				if (window.has("y")) {
-					windowY = window.get("y").getAsInt();
-				}
-				if (window.has("width")) {
-					setWindowWidth(window.get("width").getAsInt());
-				}
-				if (window.has("height")) {
-					setWindowHeight(window.get("height").getAsInt());
-				}
-				if (window.has("scroll")) {
-					scrollOffset = window.get("scroll").getAsInt();
-				}
-				if (window.has("category")) {
-					try {
-						selectedCategory = Category.valueOf(window.get("category").getAsString());
-					} catch (IllegalArgumentException ignored) {
-					}
-				}
-				if (window.has("collapsed")) {
-					for (var element : window.getAsJsonArray("collapsed")) {
-						try {
-							collapsedCategories.add(Category.valueOf(element.getAsString()));
-						} catch (IllegalArgumentException ignored) {
-						}
-					}
-				}
-			} else if (json.has("panels")) {
-				JsonObject panels = json.getAsJsonObject("panels");
-				for (Category category : Category.values()) {
-					if (!panels.has(category.name())) {
-						continue;
-					}
-					JsonObject panel = panels.getAsJsonObject(category.name());
-					int px = panel.get("x").getAsInt();
-					int py = panel.get("y").getAsInt();
-					boolean collapsed = panel.has("collapsed") && panel.get("collapsed").getAsBoolean();
-					categoryPanels.set(category, px, py, collapsed);
-					windowX = px;
-					windowY = py;
-				}
-			}
+			applyCategoryPanels(json);
+			applyWindow(json);
 		} catch (IOException exception) {
 			VirulentClient.LOGGER.error("Failed to load GUI settings", exception);
+		} catch (RuntimeException exception) {
+			// A torn gui.json must not take the client down before any in-game recovery is reachable.
+			VirulentClient.LOGGER.error("gui.json is corrupt, falling back to default GUI settings", exception);
+			resetToDefaults();
 		} finally {
 			loading = false;
 		}
+	}
+
+	private void applyAppearance(JsonObject json) {
+		if (json.has("layout")) {
+			apply(json, "layout", value -> layoutStyle = GuiLayoutStyle.fromName(value.getAsString()));
+		} else {
+			apply(json, "theme", value -> layoutStyle = GuiLayoutStyle.fromName(value.getAsString()));
+		}
+		apply(json, "accentColor", value -> accentColor = value.getAsInt());
+		apply(json, "headerColor", value -> headerColor = value.getAsInt());
+		apply(json, "showDescriptions", value -> showDescriptions = value.getAsBoolean());
+		apply(json, "showKeybinds", value -> showKeybinds = value.getAsBoolean());
+	}
+
+	private void applyHud(JsonObject hud) {
+		if (hud == null) {
+			return;
+		}
+		apply(hud, "x", value -> hudX = value.getAsInt());
+		apply(hud, "y", value -> hudY = value.getAsInt());
+		apply(hud, "sort", value -> hudSort = HudSort.valueOf(value.getAsString()));
+		apply(hud, "visible", value -> hudVisible = value.getAsBoolean());
+		apply(hud, "black", value -> hudBlack = value.getAsBoolean());
+	}
+
+	private void applyCategoryPanels(JsonObject json) {
+		JsonObject panels = objectOrNull(json, "categoryPanels");
+		if (panels == null) {
+			categoryPanels.resetDefaults(layoutStyle);
+			return;
+		}
+		for (Category category : Category.values()) {
+			JsonObject panel = objectOrNull(panels, category.name());
+			if (panel == null) {
+				continue;
+			}
+			categoryPanels.set(
+				category,
+				intOrDefault(panel, "x", 20),
+				intOrDefault(panel, "y", 20),
+				booleanOrDefault(panel, "collapsed", false)
+			);
+		}
+	}
+
+	private void applyWindow(JsonObject json) {
+		JsonObject window = objectOrNull(json, "window");
+		if (window == null) {
+			applyLegacyPanels(objectOrNull(json, "panels"));
+			return;
+		}
+		apply(window, "x", value -> windowX = value.getAsInt());
+		apply(window, "y", value -> windowY = value.getAsInt());
+		apply(window, "width", value -> setWindowWidth(value.getAsInt()));
+		apply(window, "height", value -> setWindowHeight(value.getAsInt()));
+		apply(window, "scroll", value -> scrollOffset = value.getAsInt());
+		apply(window, "category", value -> selectedCategory = Category.valueOf(value.getAsString()));
+		if (window.has("collapsed") && window.get("collapsed").isJsonArray()) {
+			for (JsonElement element : window.getAsJsonArray("collapsed")) {
+				try {
+					collapsedCategories.add(Category.valueOf(element.getAsString()));
+				} catch (RuntimeException exception) {
+					logBadEntry("window.collapsed", exception);
+				}
+			}
+		}
+	}
+
+	/** Pre-{@code window} layout, where each category carried its own position. */
+	private void applyLegacyPanels(JsonObject panels) {
+		if (panels == null) {
+			return;
+		}
+		for (Category category : Category.values()) {
+			JsonObject panel = objectOrNull(panels, category.name());
+			if (panel == null) {
+				continue;
+			}
+			int px = intOrDefault(panel, "x", windowX);
+			int py = intOrDefault(panel, "y", windowY);
+			categoryPanels.set(category, px, py, booleanOrDefault(panel, "collapsed", false));
+			windowX = px;
+			windowY = py;
+		}
+	}
+
+	/** Applies one entry, logging and skipping it when the stored value has the wrong shape. */
+	private static void apply(JsonObject owner, String key, Consumer<JsonElement> applier) {
+		if (!owner.has(key) || owner.get(key).isJsonNull()) {
+			return;
+		}
+		try {
+			applier.accept(owner.get(key));
+		} catch (RuntimeException exception) {
+			logBadEntry(key, exception);
+		}
+	}
+
+	private static JsonObject objectOrNull(JsonObject owner, String key) {
+		return owner.has(key) && owner.get(key).isJsonObject() ? owner.getAsJsonObject(key) : null;
+	}
+
+	private static int intOrDefault(JsonObject owner, String key, int fallback) {
+		if (!owner.has(key) || owner.get(key).isJsonNull()) {
+			return fallback;
+		}
+		try {
+			return owner.get(key).getAsInt();
+		} catch (RuntimeException exception) {
+			logBadEntry(key, exception);
+			return fallback;
+		}
+	}
+
+	private static boolean booleanOrDefault(JsonObject owner, String key, boolean fallback) {
+		if (!owner.has(key) || owner.get(key).isJsonNull()) {
+			return fallback;
+		}
+		try {
+			return owner.get(key).getAsBoolean();
+		} catch (RuntimeException exception) {
+			logBadEntry(key, exception);
+			return fallback;
+		}
+	}
+
+	private static void logBadEntry(String key, RuntimeException exception) {
+		VirulentClient.LOGGER.warn("Ignoring malformed GUI setting {}: {}", key, exception.toString());
 	}
 
 	public void save() {
@@ -412,7 +473,7 @@ public final class GuiSettings {
 		try {
 			Path path = getPath();
 			Files.createDirectories(path.getParent());
-			Files.writeString(path, GSON.toJson(json));
+			ConfigFiles.writeAtomically(path, GSON.toJson(json));
 		} catch (IOException exception) {
 			VirulentClient.LOGGER.error("Failed to save GUI settings", exception);
 		}
