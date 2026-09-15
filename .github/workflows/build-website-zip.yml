@@ -30,10 +30,6 @@ jobs:
           distribution: temurin
           java-version: '25'
 
-      # gradle.properties pins a Windows JDK path for local builds; drop it on CI.
-      - name: Use runner JDK
-        run: sed -i '/^org.gradle.java.home=/d' gradle.properties
-
       - name: Build website zip
         run: ./gradlew --no-daemon packageWebsiteZip
 
@@ -41,7 +37,6 @@ jobs:
         run: |
           git config user.name "virulent-ci"
           git config user.email "ci@users.noreply.github.com"
-          git checkout -- gradle.properties
           git add website/downloads
           if git diff --cached --quiet; then
             echo "Downloads unchanged; nothing to commit."
